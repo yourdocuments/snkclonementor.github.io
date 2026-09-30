@@ -10,27 +10,20 @@
 
   <meta
     name="description"
-    content="SNK AI Mentor Studio — Create AI teaching videos using your avatar, voice and lesson script."
+    content="SNK AI Mentor Studio — Create AI teaching videos using your own avatar, voice and lesson scripts."
   >
 
   <title>AI Mentor Studio | SNK AI Mentor</title>
 
-  <!-- =========================================================
-       MAIN SITE CSS
-  ========================================================== -->
   <link rel="stylesheet" href="../style.css">
-
-  <!-- =========================================================
-       AI MENTOR STUDIO CSS
-  ========================================================== -->
   <link rel="stylesheet" href="ai-mentor.css">
 </head>
 
 <body class="ai-mentor-page">
 
-  <!-- =========================================================
+  <!-- =====================================================
        BACKGROUND
-  ========================================================== -->
+  ====================================================== -->
 
   <div class="studio-bg" aria-hidden="true">
     <div class="studio-grid"></div>
@@ -40,9 +33,9 @@
   </div>
 
 
-  <!-- =========================================================
+  <!-- =====================================================
        HEADER
-  ========================================================== -->
+  ====================================================== -->
 
   <header class="mentor-header">
 
@@ -66,3 +59,1602 @@
 
         <span class="project-label">
           PROJECT
+        </span>
+
+        <input
+          type="text"
+          id="projectNameTop"
+          class="form-control"
+          value="My AI Lesson"
+          aria-label="Project name"
+        >
+
+      </div>
+
+
+      <div class="mentor-header-actions">
+
+        <button
+          type="button"
+          class="mentor-btn"
+          id="saveProjectBtn">
+          Save Project
+        </button>
+
+        <button
+          type="button"
+          class="mentor-btn mentor-btn-primary"
+          id="prepareVideoBtn">
+          Prepare Video
+        </button>
+
+      </div>
+
+    </div>
+
+  </header>
+
+
+  <!-- =====================================================
+       MAIN
+  ====================================================== -->
+
+  <main class="mentor-main">
+
+    <!-- ===================================================
+         HERO
+    ==================================================== -->
+
+    <section class="mentor-hero">
+
+      <div class="mentor-kicker">
+        AI Mentor Studio
+      </div>
+
+      <h1>
+        Build your AI teaching video.
+      </h1>
+
+      <p>
+        Upload your mentor video, add your voice sample,
+        write your lesson and configure the AI engine.
+        Everything is prepared from one professional workspace.
+      </p>
+
+    </section>
+
+
+    <!-- ===================================================
+         STATUS
+    ==================================================== -->
+
+    <div class="studio-status-bar">
+
+      <div class="studio-status">
+
+        <span class="studio-status-dot"></span>
+
+        <span id="studioStatus">
+          Ready to configure
+        </span>
+
+      </div>
+
+      <div>
+        <span
+          id="savedTime"
+          class="project-label">
+          Not saved yet
+        </span>
+      </div>
+
+    </div>
+
+
+    <!-- ===================================================
+         WORKFLOW
+    ==================================================== -->
+
+    <div class="workflow-strip">
+
+      <div class="workflow-step">
+
+        <div class="workflow-step-number">
+          01
+        </div>
+
+        <strong>
+          Your Face
+        </strong>
+
+        <span>
+          Upload mentor video
+        </span>
+
+      </div>
+
+
+      <div class="workflow-step">
+
+        <div class="workflow-step-number">
+          02
+        </div>
+
+        <strong>
+          Your Voice
+        </strong>
+
+        <span>
+          Add voice sample
+        </span>
+
+      </div>
+
+
+      <div class="workflow-step">
+
+        <div class="workflow-step-number">
+          03
+        </div>
+
+        <strong>
+          Lesson
+        </strong>
+
+        <span>
+          Write teaching script
+        </span>
+
+      </div>
+
+
+      <div class="workflow-step">
+
+        <div class="workflow-step-number">
+          04
+        </div>
+
+        <strong>
+          AI Video
+        </strong>
+
+        <span>
+          Generate final output
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <!-- ===================================================
+         WORKSPACE
+    ==================================================== -->
+
+    <div class="mentor-workspace">
+
+
+      <!-- =================================================
+           LEFT CONTENT
+      ================================================== -->
+
+      <section class="mentor-content">
+
+
+        <!-- ===============================================
+             PROJECT
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ◈
+              </div>
+
+              <div>
+                <h2>
+                  Project
+                </h2>
+
+                <p>
+                  Give your lesson project a clear name.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="form-grid">
+
+            <div class="form-group full">
+
+              <label
+                class="form-label"
+                for="projectName">
+                Project Name
+              </label>
+
+              <input
+                type="text"
+                id="projectName"
+                class="form-control"
+                value="My AI Lesson"
+                placeholder="Example: Digital Marketing Lesson 01"
+              >
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             FACE VIDEO
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ◉
+              </div>
+
+              <div>
+                <h2>
+                  Your Mentor Video
+                </h2>
+
+                <p>
+                  Upload a clear video of yourself for the
+                  AI avatar preparation workflow.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <input
+            type="file"
+            id="faceVideoInput"
+            accept="video/*"
+            hidden
+          >
+
+
+          <div
+            class="upload-zone"
+            id="faceUploadArea">
+
+            <div
+              class="upload-empty"
+              id="faceUploadEmpty">
+
+              <div class="upload-empty-icon">
+                ◉
+              </div>
+
+              <strong>
+                Upload your mentor video
+              </strong>
+
+              <p>
+                Use a clear front-facing video with
+                good lighting and minimal background noise.
+              </p>
+
+              <div class="upload-actions">
+
+                <button
+                  type="button"
+                  class="mentor-btn mentor-btn-primary"
+                  id="selectFaceVideoBtn">
+                  Select Video
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="face-preview-wrapper"
+              id="facePreviewWrapper"
+              hidden>
+
+              <video
+                id="faceVideoPreview"
+                controls
+                playsinline>
+              </video>
+
+              <div class="preview-toolbar">
+
+                <span class="project-label">
+                  Mentor Video
+                </span>
+
+                <button
+                  type="button"
+                  class="mentor-btn"
+                  id="changeFaceVideoBtn">
+                  Change Video
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             VOICE
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ♪
+              </div>
+
+              <div>
+                <h2>
+                  Your Voice
+                </h2>
+
+                <p>
+                  Add a clean voice sample for the
+                  AI voice workflow.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <input
+            type="file"
+            id="voiceInput"
+            accept="audio/*"
+            hidden
+          >
+
+
+          <div
+            class="upload-zone"
+            id="voiceUploadArea">
+
+            <div
+              class="upload-empty"
+              id="voiceUploadEmpty">
+
+              <div class="upload-empty-icon">
+                ♪
+              </div>
+
+              <strong>
+                Upload voice sample
+              </strong>
+
+              <p>
+                WAV, MP3 or another supported audio format
+                can be used for the preparation workflow.
+              </p>
+
+              <div class="upload-actions">
+
+                <button
+                  type="button"
+                  class="mentor-btn mentor-btn-primary"
+                  id="selectVoiceBtn">
+                  Select Audio
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="voice-preview"
+              id="voicePreview"
+              hidden>
+
+              <div class="voice-file-name"
+                   id="voiceFileName">
+                No voice sample
+              </div>
+
+              <div class="voice-file-meta"
+                   id="voiceFileMeta">
+              </div>
+
+              <audio
+                id="voiceAudioPlayer"
+                controls>
+              </audio>
+
+              <div class="upload-actions">
+
+                <button
+                  type="button"
+                  class="mentor-btn"
+                  id="removeVoiceBtn">
+                  Remove
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             LESSON SCRIPT
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                Aa
+              </div>
+
+              <div>
+                <h2>
+                  Lesson Script
+                </h2>
+
+                <p>
+                  Write exactly what your AI mentor should teach.
+                </p>
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="mentor-btn"
+              id="clearScriptBtn">
+              Clear
+            </button>
+
+          </div>
+
+
+          <div class="form-grid">
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="scriptLanguage">
+                Language
+              </label>
+
+              <select
+                id="scriptLanguage"
+                class="form-select">
+
+                <option value="en">
+                  English
+                </option>
+
+                <option value="bn">
+                  বাংলা
+                </option>
+
+                <option value="bn-en">
+                  Bangla + English
+                </option>
+
+                <option value="hi">
+                  Hindi
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="scriptStyle">
+                Teaching Style
+              </label>
+
+              <select
+                id="scriptStyle"
+                class="form-select">
+
+                <option value="professional">
+                  Professional
+                </option>
+
+                <option value="friendly">
+                  Friendly
+                </option>
+
+                <option value="energetic">
+                  Energetic
+                </option>
+
+                <option value="storytelling">
+                  Storytelling
+                </option>
+
+                <option value="calm">
+                  Calm & Clear
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="form-group full">
+
+              <div class="script-editor">
+
+                <label
+                  class="form-label"
+                  for="lessonScript">
+
+                  Teaching Script
+
+                  <small>
+                    Auto-save enabled
+                  </small>
+
+                </label>
+
+
+                <textarea
+                  id="lessonScript"
+                  class="form-textarea"
+                  placeholder="Write your lesson here...
+
+Example:
+
+Hello everyone. Welcome to today's lesson.
+
+In this class we are going to learn the basics of digital marketing.
+
+Let's begin with the first concept..."
+                ></textarea>
+
+
+                <div class="script-meta">
+
+                  <div class="script-meta-left">
+
+                    <span>
+                      Words:
+                      <strong id="wordCount">0</strong>
+                    </span>
+
+                    <span>
+                      Characters:
+                      <strong id="charCount">0</strong>
+                    </span>
+
+                  </div>
+
+
+                  <div class="script-meta-right">
+
+                    <span
+                      id="autosaveStatus"
+                      class="script-autosave">
+                      Auto-save ready
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             VIDEO SETTINGS
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ▣
+              </div>
+
+              <div>
+                <h2>
+                  Video Settings
+                </h2>
+
+                <p>
+                  Configure the final teaching video format.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="settings-grid">
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="videoFormat">
+                Format
+              </label>
+
+              <select
+                id="videoFormat"
+                class="form-select">
+
+                <option value="mp4">
+                  MP4
+                </option>
+
+                <option value="webm">
+                  WebM
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="videoResolution">
+                Resolution
+              </label>
+
+              <select
+                id="videoResolution"
+                class="form-select">
+
+                <option value="1080p">
+                  1080p
+                </option>
+
+                <option value="720p">
+                  720p
+                </option>
+
+                <option value="4k">
+                  4K
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="mentorPosition">
+                Mentor Position
+              </label>
+
+              <select
+                id="mentorPosition"
+                class="form-select">
+
+                <option value="right">
+                  Right
+                </option>
+
+                <option value="left">
+                  Left
+                </option>
+
+                <option value="center">
+                  Center
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+              <label
+                class="form-label"
+                for="videoBackground">
+                Background
+              </label>
+
+              <select
+                id="videoBackground"
+                class="form-select">
+
+                <option value="studio">
+                  AI Studio
+                </option>
+
+                <option value="classroom">
+                  Classroom
+                </option>
+
+                <option value="office">
+                  Office
+                </option>
+
+                <option value="transparent">
+                  Transparent
+                </option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             AI CONFIGURATION
+        ================================================ -->
+
+        <article
+          class="mentor-card ai-config-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ✦
+              </div>
+
+              <div>
+
+                <h2>
+                  AI Engine Configuration
+                </h2>
+
+                <p>
+                  Select Demo mode for testing or connect
+                  your own AI provider for live generation.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div class="ai-config-badge">
+
+              <span
+                class="ai-config-badge-dot">
+              </span>
+
+              AI ENGINE
+
+            </div>
+
+          </div>
+
+
+          <div class="ai-config-layout">
+
+
+            <!-- =========================================
+                 MAIN CONFIG
+            ========================================== -->
+
+            <div class="ai-config-main">
+
+
+              <div class="ai-mode-selector">
+
+
+                <!-- DEMO -->
+
+                <label class="ai-mode-option">
+
+                  <input
+                    type="radio"
+                    name="aiMode"
+                    value="demo"
+                    data-ai-mode="demo"
+                    checked
+                  >
+
+                  <span class="ai-mode-box">
+
+                    <span class="ai-mode-icon">
+                      ◇
+                    </span>
+
+                    <strong>
+                      Demo Mode
+                    </strong>
+
+                    <span>
+                      Test the complete Studio workflow
+                      without a live AI provider.
+                    </span>
+
+                  </span>
+
+                </label>
+
+
+                <!-- LIVE -->
+
+                <label class="ai-mode-option">
+
+                  <input
+                    type="radio"
+                    name="aiMode"
+                    value="live"
+                    data-ai-mode="live"
+                  >
+
+                  <span class="ai-mode-box">
+
+                    <span class="ai-mode-icon">
+                      ⚡
+                    </span>
+
+                    <strong>
+                      Live Mode
+                    </strong>
+
+                    <span>
+                      Connect a real AI backend/provider
+                      for production generation.
+                    </span>
+
+                  </span>
+
+                </label>
+
+              </div>
+
+
+              <!-- PROVIDER -->
+
+              <div class="ai-provider-row">
+
+
+                <div class="ai-config-field">
+
+                  <label
+                    class="form-label"
+                    for="aiProvider">
+                    AI Provider
+                  </label>
+
+                  <select
+                    id="aiProvider"
+                    class="form-select">
+
+                    <option value="demo">
+                      Demo Engine
+                    </option>
+
+                    <option value="custom">
+                      Custom API
+                    </option>
+
+                    <option value="heygen">
+                      HeyGen
+                    </option>
+
+                    <option value="synthesia">
+                      Synthesia
+                    </option>
+
+                    <option value="d-id">
+                      D-ID
+                    </option>
+
+                  </select>
+
+                </div>
+
+
+                <div class="ai-config-field">
+
+                  <label
+                    class="form-label"
+                    for="aiBaseUrl">
+                    API Base URL
+                  </label>
+
+                  <input
+                    type="url"
+                    id="aiBaseUrl"
+                    class="form-control"
+                    placeholder="https://your-api.example.com"
+                    autocomplete="off"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <!-- API KEY -->
+
+              <div class="ai-config-field ai-live-only">
+
+                <label
+                  class="form-label"
+                  for="aiApiKey">
+
+                  API Key
+
+                  <small>
+                    Never share this key publicly
+                  </small>
+
+                </label>
+
+
+                <div class="ai-key-wrapper">
+
+                  <input
+                    type="password"
+                    id="aiApiKey"
+                    class="form-control"
+                    placeholder="Enter API key"
+                    autocomplete="new-password"
+                  >
+
+                  <button
+                    type="button"
+                    class="ai-key-toggle"
+                    id="toggleAIKeyBtn"
+                    data-ai-key-toggle>
+                    Show
+                  </button>
+
+                </div>
+
+              </div>
+
+
+              <!-- ENDPOINTS -->
+
+              <div class="ai-provider-row ai-live-only">
+
+
+                <div class="ai-config-field">
+
+                  <label
+                    class="form-label"
+                    for="aiGenerateEndpoint">
+                    Generate Endpoint
+                  </label>
+
+                  <input
+                    type="text"
+                    id="aiGenerateEndpoint"
+                    class="form-control"
+                    value="/api/ai/video/generate"
+                    autocomplete="off"
+                  >
+
+                </div>
+
+
+                <div class="ai-config-field">
+
+                  <label
+                    class="form-label"
+                    for="aiStatusEndpoint">
+                    Status Endpoint
+                  </label>
+
+                  <input
+                    type="text"
+                    id="aiStatusEndpoint"
+                    class="form-control"
+                    value="/api/ai/video/status"
+                    autocomplete="off"
+                  >
+
+                </div>
+
+              </div>
+
+
+              <!-- DEMO NOTE -->
+
+              <div
+                class="ai-demo-note ai-demo-only"
+                id="aiDemoNote">
+
+                <strong>
+                  Demo:
+                </strong>
+
+                <span>
+                  No API key or external provider is required.
+                  Use this mode to test your Studio workflow.
+                </span>
+
+              </div>
+
+
+              <!-- LIVE WARNING -->
+
+              <div
+                class="ai-live-warning ai-live-only"
+                id="aiLiveWarning"
+                hidden>
+
+                <div class="ai-live-warning-icon">
+                  !
+                </div>
+
+                <p>
+                  Live mode requires a real backend/provider.
+                  Do not place permanent production API keys
+                  inside public GitHub Pages code. Use a secure
+                  server-side API layer for production credentials.
+                </p>
+
+              </div>
+
+
+              <!-- ACTIONS -->
+
+              <div class="ai-connection-actions">
+
+                <button
+                  type="button"
+                  class="mentor-btn mentor-btn-primary"
+                  id="saveAIConfigBtn"
+                  data-ai-save>
+                  Save Configuration
+                </button>
+
+                <button
+                  type="button"
+                  class="mentor-btn"
+                  id="testAIConnectionBtn"
+                  data-ai-test>
+                  Test Connection
+                </button>
+
+                <button
+                  type="button"
+                  class="mentor-btn"
+                  id="resetAIConfigBtn"
+                  data-ai-reset>
+                  Reset
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <!-- =========================================
+                 CONNECTION SIDE
+            ========================================== -->
+
+            <div class="ai-config-side">
+
+              <div class="ai-connection-box">
+
+
+                <div>
+
+                  <div class="ai-connection-top">
+
+                    <div>
+
+                      <div class="ai-connection-label">
+                        ENGINE STATUS
+                      </div>
+
+                      <div
+                        id="aiConnectionStatus"
+                        class="ai-connection-status connected"
+                        data-ai-connection-status>
+                        Demo Engine Ready
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  <div class="ai-connection-details">
+
+
+                    <div class="ai-connection-detail">
+
+                      <span>
+                        Mode
+                      </span>
+
+                      <span
+                        id="aiConnectionMode"
+                        data-ai-connection-mode>
+                        Demo
+                      </span>
+
+                    </div>
+
+
+                    <div class="ai-connection-detail">
+
+                      <span>
+                        Provider
+                      </span>
+
+                      <span
+                        id="aiConnectionProvider"
+                        data-ai-connection-provider>
+                        Demo
+                      </span>
+
+                    </div>
+
+
+                    <div class="ai-connection-detail">
+
+                      <span>
+                        Endpoint
+                      </span>
+
+                      <span
+                        id="aiConnectionEndpoint"
+                        data-ai-connection-endpoint>
+                        Not configured
+                      </span>
+
+                    </div>
+
+
+                  </div>
+
+                </div>
+
+
+                <div class="form-help">
+
+                  Demo mode works locally for interface testing.
+                  Live mode requires a configured backend.
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             VIDEO OUTPUT
+        ================================================ -->
+
+        <article class="mentor-card">
+
+          <div class="mentor-card-header">
+
+            <div class="mentor-card-title">
+
+              <div class="mentor-card-icon">
+                ▶
+              </div>
+
+              <div>
+
+                <h2>
+                  AI Video Output
+                </h2>
+
+                <p>
+                  Your generated teaching video will appear here.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="video-output">
+
+            <div class="video-output-empty">
+
+              <div class="video-output-empty-icon">
+                ▶
+              </div>
+
+              <h3>
+                No video generated yet
+              </h3>
+
+              <p>
+                Complete your mentor video, voice sample,
+                lesson script and AI configuration.
+                Then use Prepare Video.
+              </p>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+      </section>
+
+
+      <!-- =================================================
+           SIDEBAR
+      ================================================== -->
+
+      <aside class="mentor-sidebar">
+
+
+        <!-- ===============================================
+             READINESS
+        ================================================ -->
+
+        <div class="sidebar-card">
+
+          <div class="readiness-header">
+
+            <div>
+
+              <h3>
+                Studio Readiness
+              </h3>
+
+              <p>
+                Complete all required inputs.
+              </p>
+
+            </div>
+
+            <div
+              class="readiness-percent"
+              id="readinessPercent">
+              0%
+            </div>
+
+          </div>
+
+
+          <div class="readiness-bar">
+
+            <div
+              class="readiness-progress"
+              id="readinessProgress">
+            </div>
+
+          </div>
+
+
+          <div class="readiness-list">
+
+
+            <div class="readiness-item">
+
+              <span
+                class="readiness-icon"
+                id="checkFace">
+                •
+              </span>
+
+              <span>
+                Mentor video
+              </span>
+
+            </div>
+
+
+            <div class="readiness-item">
+
+              <span
+                class="readiness-icon"
+                id="checkVoice">
+                •
+              </span>
+
+              <span>
+                Voice sample
+              </span>
+
+            </div>
+
+
+            <div class="readiness-item">
+
+              <span
+                class="readiness-icon"
+                id="checkScript">
+                •
+              </span>
+
+              <span>
+                Lesson script
+              </span>
+
+            </div>
+
+
+            <div class="readiness-item">
+
+              <span
+                class="readiness-icon"
+                id="checkSettings">
+                •
+              </span>
+
+              <span>
+                Video + AI settings
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===============================================
+             SAVE
+        ================================================ -->
+
+        <div class="sidebar-card save-project-card">
+
+          <h3>
+            Save Project
+          </h3>
+
+          <p>
+            Keep your current lesson configuration
+            available on this browser.
+          </p>
+
+
+          <div class="save-project-actions">
+
+            <button
+              type="button"
+              class="mentor-btn mentor-btn-primary"
+              id="sidebarSaveBtn">
+              Save Project
+            </button>
+
+            <button
+              type="button"
+              class="mentor-btn"
+              id="exportProjectBtn">
+              Export Project
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===============================================
+             HELP
+        ================================================ -->
+
+        <div class="sidebar-card">
+
+          <h3>
+            How it works
+          </h3>
+
+          <p>
+            Follow these four steps to prepare your AI lesson.
+          </p>
+
+
+          <div class="help-list">
+
+
+            <div class="help-item">
+
+              <div class="help-number">
+                1
+              </div>
+
+              <div>
+
+                <strong>
+                  Add your face video
+                </strong>
+
+                <span>
+                  Upload a clear mentor video.
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="help-item">
+
+              <div class="help-number">
+                2
+              </div>
+
+              <div>
+
+                <strong>
+                  Add your voice
+                </strong>
+
+                <span>
+                  Upload a clean voice sample.
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="help-item">
+
+              <div class="help-number">
+                3
+              </div>
+
+              <div>
+
+                <strong>
+                  Write your lesson
+                </strong>
+
+                <span>
+                  Prepare the exact teaching script.
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="help-item">
+
+              <div class="help-number">
+                4
+              </div>
+
+              <div>
+
+                <strong>
+                  Generate
+                </strong>
+
+                <span>
+                  Send the prepared project to the AI engine.
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===============================================
+             PROVIDER INFO
+        ================================================ -->
+
+        <div class="sidebar-card">
+
+          <h3>
+            Production Note
+          </h3>
+
+          <p>
+            GitHub Pages can host this Studio interface,
+            but real face/voice generation should run through
+            a secure backend or approved AI provider API.
+          </p>
+
+        </div>
+
+
+      </aside>
+
+    </div>
+
+  </main>
+
+
+  <!-- =====================================================
+       TOAST
+  ====================================================== -->
+
+  <div
+    class="mentor-toast"
+    id="mentorToast"
+    role="status"
+    aria-live="polite">
+
+    <span id="toastMessage">
+    </span>
+
+  </div>
+
+
+  <!-- =====================================================
+       JAVASCRIPT
+  ====================================================== -->
+
+  <script src="../script.js"></script>
+
+  <script src="../ai/ai-config.js"></script>
+
+  <script src="../ai/avatar.js"></script>
+
+  <script src="../ai/voice.js"></script>
+
+  <script src="../ai/video.js"></script>
+
+  <script src="ai-mentor.js"></script>
+
+</body>
+</html>
