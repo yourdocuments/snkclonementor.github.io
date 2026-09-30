@@ -1,1224 +1,423 @@
 /* =========================================================
    SNK AI MENTOR
-   Mentor Studio JavaScript
-   File: mentor/ai-mentor.js
+   mentor/ai-mentor.js
+   ---------------------------------------------------------
+   FULL AI ENGINE INTEGRATION
 
-   Features:
-   - Face video upload + preview
-   - Voice audio upload + preview
-   - Drag & drop upload
-   - Lesson script editor
-   - Word count
-   - Character count
-   - Auto-save
-   - Project save
-   - Project restore
-   - Project name sync
-   - AI readiness percentage
-   - Video settings persistence
-   - Clear script
-   - Export project as JSON
-   - Prepare AI Video workflow
-   - Toast notifications
+   Connected modules:
+   ../ai/ai-config.js
+   ../ai/avatar.js
+   ../ai/voice.js
+   ../ai/video.js
+
+   Workflow:
+   Face Video
+        ↓
+   Voice Sample
+        ↓
+   Lesson Script
+        ↓
+   Video Settings
+        ↓
+   Prepare AI Video
+        ↓
+   AI Video Engine
    ========================================================= */
 
 (() => {
+
   "use strict";
 
 
   /* =======================================================
-     CONFIG
-  ======================================================== */
+     1. GLOBAL NAMESPACE
+     ======================================================= */
 
-  const STORAGE_KEY = "snkAiMentorStudioProject";
-
-  const AUTOSAVE_DELAY = 700;
-
-  let faceVideoURL = null;
-  let voiceAudioURL = null;
-
-  let autoSaveTimer = null;
+  window.SNKAI = window.SNKAI || {};
 
 
   /* =======================================================
-     DOM HELPERS
-  ======================================================== */
+     2. STORAGE
+     ======================================================= */
 
-  const $ = (selector) => document.querySelector(selector);
-
-  const $$ = (selector) => document.querySelectorAll(selector);
-
-
-  /* =======================================================
-     ELEMENTS
-  ======================================================== */
-
-  const faceVideoInput =
-    $("#faceVideoInput");
-
-  const faceUploadArea =
-    $("#faceUploadArea");
-
-  const faceUploadEmpty =
-    $("#faceUploadEmpty");
-
-  const facePreviewWrapper =
-    $("#facePreviewWrapper");
-
-  const faceVideoPreview =
-    $("#faceVideoPreview");
-
-  const selectFaceVideoBtn =
-    $("#selectFaceVideoBtn");
-
-  const changeFaceVideoBtn =
-    $("#changeFaceVideoBtn");
+  const STORAGE_KEY =
+    "snkAiMentorStudioProject";
 
 
-  const voiceInput =
-    $("#voiceInput");
-
-  const voiceUploadArea =
-    $("#voiceUploadArea");
-
-  const voiceUploadEmpty =
-    $("#voiceUploadEmpty");
-
-  const voicePreview =
-    $("#voicePreview");
-
-  const voiceAudioPlayer =
-    $("#voiceAudioPlayer");
-
-  const voiceFileName =
-    $("#voiceFileName");
-
-  const voiceFileMeta =
-    $("#voiceFileMeta");
-
-  const selectVoiceBtn =
-    $("#selectVoiceBtn");
-
-  const removeVoiceBtn =
-    $("#removeVoiceBtn");
-
-
-  const lessonScript =
-    $("#lessonScript");
-
-  const scriptLanguage =
-    $("#scriptLanguage");
-
-  const scriptStyle =
-    $("#scriptStyle");
-
-  const wordCount =
-    $("#wordCount");
-
-  const charCount =
-    $("#charCount");
-
-  const autosaveStatus =
-    $("#autosaveStatus");
-
-  const clearScriptBtn =
-    $("#clearScriptBtn");
-
-
-  const projectName =
-    $("#projectName");
-
-  const projectNameTop =
-    $("#projectNameTop");
-
-  const saveProjectBtn =
-    $("#saveProjectBtn");
-
-  const sidebarSaveBtn =
-    $("#sidebarSaveBtn");
-
-  const savedTime =
-    $("#savedTime");
-
-
-  const videoFormat =
-    $("#videoFormat");
-
-  const videoResolution =
-    $("#videoResolution");
-
-  const mentorPosition =
-    $("#mentorPosition");
-
-  const videoBackground =
-    $("#videoBackground");
-
-
-  const studioStatus =
-    $("#studioStatus");
-
-  const readinessPercent =
-    $("#readinessPercent");
-
-  const readinessProgress =
-    $("#readinessProgress");
-
-  const checkFace =
-    $("#checkFace");
-
-  const checkVoice =
-    $("#checkVoice");
-
-  const checkScript =
-    $("#checkScript");
-
-  const checkSettings =
-    $("#checkSettings");
-
-
-  const prepareVideoBtn =
-    $("#prepareVideoBtn");
-
-  const exportProjectBtn =
-    $("#exportProjectBtn");
-
-
-  const mentorToast =
-    $("#mentorToast");
-
-  const toastMessage =
-    $("#toastMessage");
+  const SETTINGS_KEY =
+    "snkAiMentorVideoSettings";
 
 
   /* =======================================================
-     INTERNAL STATE
-  ======================================================== */
+     3. DOM HELPER
+     ======================================================= */
+
+  const $ = (id) =>
+    document.getElementById(id);
+
+
+  /* =======================================================
+     4. STATE
+     ======================================================= */
 
   const state = {
-    faceVideo: null,
-    voiceAudio: null,
+
+    initialized: false,
 
     projectName:
-      "Untitled Mentor Project",
+      "My AI Mentor Project",
+
+    faceFile: null,
+
+    voiceFile: null,
 
     script: "",
 
-    language: "bn",
+    videoSettings: {
 
-    style: "teaching",
+      format: "mp4",
 
-    videoFormat: "16:9",
+      resolution: "1080p",
 
-    videoResolution: "1080",
+      mentorPosition: "right",
 
-    mentorPosition: "center",
+      background: "studio",
 
-    videoBackground: "original",
+      aspectRatio: "16:9",
 
-    savedAt: null
+      fps: 30,
+
+      subtitles: false,
+
+      audio: true
+
+    },
+
+    lastSavedAt: null,
+
+    videoPrepared: false,
+
+    videoJobId: null,
+
+    videoStatus: "idle",
+
+    videoProgress: 0
+
   };
 
 
   /* =======================================================
-     INIT
-  ======================================================== */
-
-  function init() {
-
-    restoreProject();
-
-    bindEvents();
-
-    updateProjectName();
-
-    updateScriptStats();
-
-    updateReadiness();
-
-    updateSettingsStatus();
-
-    setupDragAndDrop();
-
-    setStudioStatus(
-      "Ready to build"
-    );
-
-  }
-
-
-  /* =======================================================
-     EVENTS
-  ======================================================== */
-
-  function bindEvents() {
-
-    /* -----------------------------------------------
-       Face video
-    ------------------------------------------------ */
-
-    if (selectFaceVideoBtn) {
-
-      selectFaceVideoBtn.addEventListener(
-        "click",
-        () => {
-
-          faceVideoInput?.click();
-
-        }
-      );
-
-    }
-
-
-    if (changeFaceVideoBtn) {
-
-      changeFaceVideoBtn.addEventListener(
-        "click",
-        () => {
-
-          faceVideoInput?.click();
-
-        }
-      );
-
-    }
-
-
-    if (faceVideoInput) {
-
-      faceVideoInput.addEventListener(
-        "change",
-        (event) => {
-
-          const file =
-            event.target.files?.[0];
-
-          if (file) {
-
-            handleFaceVideo(file);
-
-          }
-
-        }
-      );
-
-    }
-
-
-    /* -----------------------------------------------
-       Voice
-    ------------------------------------------------ */
-
-    if (selectVoiceBtn) {
-
-      selectVoiceBtn.addEventListener(
-        "click",
-        () => {
-
-          voiceInput?.click();
-
-        }
-      );
-
-    }
-
-
-    if (voiceInput) {
-
-      voiceInput.addEventListener(
-        "change",
-        (event) => {
-
-          const file =
-            event.target.files?.[0];
-
-          if (file) {
-
-            handleVoiceAudio(file);
-
-          }
-
-        }
-      );
-
-    }
-
-
-    if (removeVoiceBtn) {
-
-      removeVoiceBtn.addEventListener(
-        "click",
-        removeVoiceAudio
-      );
-
-    }
-
-
-    /* -----------------------------------------------
-       Script
-    ------------------------------------------------ */
-
-    if (lessonScript) {
-
-      lessonScript.addEventListener(
-        "input",
-        () => {
-
-          state.script =
-            lessonScript.value;
-
-          updateScriptStats();
-
-          scheduleAutoSave();
-
-          updateReadiness();
-
-        }
-      );
-
-    }
-
-
-    if (scriptLanguage) {
-
-      scriptLanguage.addEventListener(
-        "change",
-        () => {
-
-          state.language =
-            scriptLanguage.value;
-
-          scheduleAutoSave();
-
-        }
-      );
-
-    }
-
-
-    if (scriptStyle) {
-
-      scriptStyle.addEventListener(
-        "change",
-        () => {
-
-          state.style =
-            scriptStyle.value;
-
-          scheduleAutoSave();
-
-        }
-      );
-
-    }
-
-
-    if (clearScriptBtn) {
-
-      clearScriptBtn.addEventListener(
-        "click",
-        clearScript
-      );
-
-    }
-
-
-    /* -----------------------------------------------
-       Project name
-    ------------------------------------------------ */
-
-    if (projectName) {
-
-      projectName.addEventListener(
-        "input",
-        () => {
-
-          state.projectName =
-            projectName.value.trim()
-            ||
-            "Untitled Mentor Project";
-
-          updateProjectName();
-
-          scheduleAutoSave();
-
-        }
-      );
-
-    }
-
-
-    /* -----------------------------------------------
-       Save
-    ------------------------------------------------ */
-
-    saveProjectBtn?.addEventListener(
-      "click",
-      saveProject
-    );
-
-    sidebarSaveBtn?.addEventListener(
-      "click",
-      saveProject
-    );
-
-
-    /* -----------------------------------------------
-       Settings
-    ------------------------------------------------ */
-
-    videoFormat?.addEventListener(
-      "change",
-      () => {
-
-        state.videoFormat =
-          videoFormat.value;
-
-        scheduleAutoSave();
-
-        updateReadiness();
-
-      }
-    );
-
-
-    videoResolution?.addEventListener(
-      "change",
-      () => {
-
-        state.videoResolution =
-          videoResolution.value;
-
-        scheduleAutoSave();
-
-      }
-    );
-
-
-    mentorPosition?.addEventListener(
-      "change",
-      () => {
-
-        state.mentorPosition =
-          mentorPosition.value;
-
-        scheduleAutoSave();
-
-      }
-    );
-
-
-    videoBackground?.addEventListener(
-      "change",
-      () => {
-
-        state.videoBackground =
-          videoBackground.value;
-
-        scheduleAutoSave();
-
-      }
-    );
-
-
-    /* -----------------------------------------------
-       Export
-    ------------------------------------------------ */
-
-    exportProjectBtn?.addEventListener(
-      "click",
-      exportProject
-    );
-
-
-    /* -----------------------------------------------
-       Prepare AI video
-    ------------------------------------------------ */
-
-    prepareVideoBtn?.addEventListener(
-      "click",
-      prepareAIVideo
-    );
-
-
-    /* -----------------------------------------------
-       Page exit
-    ------------------------------------------------ */
-
-    window.addEventListener(
-      "beforeunload",
-      () => {
-
-        saveProjectToStorage(
-          false
-        );
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     FACE VIDEO
-  ======================================================== */
-
-  function handleFaceVideo(file) {
-
-    if (!file.type.startsWith("video/")) {
-
-      showToast(
-        "Please choose a video file.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    const maxSize =
-      500 * 1024 * 1024;
-
-    if (file.size > maxSize) {
-
-      showToast(
-        "Video is larger than 500 MB.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    if (faceVideoURL) {
-
-      URL.revokeObjectURL(
-        faceVideoURL
-      );
-
-    }
-
-
-    faceVideoURL =
-      URL.createObjectURL(file);
-
-
-    state.faceVideo = {
-
-      name: file.name,
-
-      type: file.type,
-
-      size: file.size,
-
-      lastModified:
-        file.lastModified
-
-    };
-
-
-    if (faceVideoPreview) {
-
-      faceVideoPreview.src =
-        faceVideoURL;
-
-      faceVideoPreview.load();
-
-    }
-
-
-    if (faceUploadEmpty) {
-
-      faceUploadEmpty.hidden =
-        true;
-
-    }
-
-
-    if (facePreviewWrapper) {
-
-      facePreviewWrapper.hidden =
-        false;
-
-    }
-
-
-    updateReadiness();
-
-    setStudioStatus(
-      "Face video added"
-    );
-
-    scheduleAutoSave();
-
-    showToast(
-      "Face video uploaded successfully."
-    );
-
-  }
-
-
-  /* =======================================================
-     VOICE AUDIO
-  ======================================================== */
-
-  function handleVoiceAudio(file) {
-
-    if (!file.type.startsWith("audio/")) {
-
-      showToast(
-        "Please choose an audio file.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    const maxSize =
-      200 * 1024 * 1024;
-
-    if (file.size > maxSize) {
-
-      showToast(
-        "Audio file is larger than 200 MB.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    if (voiceAudioURL) {
-
-      URL.revokeObjectURL(
-        voiceAudioURL
-      );
-
-    }
-
-
-    voiceAudioURL =
-      URL.createObjectURL(file);
-
-
-    state.voiceAudio = {
-
-      name: file.name,
-
-      type: file.type,
-
-      size: file.size,
-
-      lastModified:
-        file.lastModified
-
-    };
-
-
-    if (voiceAudioPlayer) {
-
-      voiceAudioPlayer.src =
-        voiceAudioURL;
-
-      voiceAudioPlayer.load();
-
-    }
-
-
-    if (voiceFileName) {
-
-      voiceFileName.textContent =
-        file.name;
-
-    }
-
-
-    if (voiceFileMeta) {
-
-      voiceFileMeta.textContent =
-        `${formatBytes(file.size)} · ${file.type || "Audio"}`;
-
-    }
-
-
-    if (voiceUploadEmpty) {
-
-      voiceUploadEmpty.hidden =
-        true;
-
-    }
-
-
-    if (voicePreview) {
-
-      voicePreview.hidden =
-        false;
-
-    }
-
-
-    updateReadiness();
-
-    setStudioStatus(
-      "Voice sample added"
-    );
-
-    scheduleAutoSave();
-
-    showToast(
-      "Voice sample uploaded successfully."
-    );
-
-  }
-
-
-  /* =======================================================
-     REMOVE VOICE
-  ======================================================== */
-
-  function removeVoiceAudio() {
-
-    if (voiceAudioURL) {
-
-      URL.revokeObjectURL(
-        voiceAudioURL
-      );
-
-      voiceAudioURL =
-        null;
-
-    }
-
-
-    state.voiceAudio =
-      null;
-
-
-    if (voiceAudioPlayer) {
-
-      voiceAudioPlayer.pause();
-
-      voiceAudioPlayer.removeAttribute(
-        "src"
-      );
-
-      voiceAudioPlayer.load();
-
-    }
-
-
-    if (voicePreview) {
-
-      voicePreview.hidden =
-        true;
-
-    }
-
-
-    if (voiceUploadEmpty) {
-
-      voiceUploadEmpty.hidden =
-        false;
-
-    }
-
-
-    if (voiceInput) {
-
-      voiceInput.value =
-        "";
-
-    }
-
-
-    updateReadiness();
-
-    scheduleAutoSave();
-
-    showToast(
-      "Voice sample removed."
-    );
-
-  }
-
-
-  /* =======================================================
-     DRAG & DROP
-  ======================================================== */
-
-  function setupDragAndDrop() {
-
-    setupDropZone(
-      faceUploadArea,
-      (file) => {
-
-        if (file.type.startsWith("video/")) {
-
-          handleFaceVideo(file);
-
-        } else {
-
-          showToast(
-            "Please drop a video file.",
-            "error"
-          );
-
-        }
-
-      }
-    );
-
-
-    setupDropZone(
-      voiceUploadArea,
-      (file) => {
-
-        if (file.type.startsWith("audio/")) {
-
-          handleVoiceAudio(file);
-
-        } else {
-
-          showToast(
-            "Please drop an audio file.",
-            "error"
-          );
-
-        }
-
-      }
-    );
-
-  }
-
-
-  function setupDropZone(
-    element,
-    callback
+     5. TOAST
+     ======================================================= */
+
+  function showToast(
+    message,
+    type = "info"
   ) {
 
-    if (!element) return;
-
-
-    const events = [
-      "dragenter",
-      "dragover"
-    ];
-
-
-    events.forEach(
-      (eventName) => {
-
-        element.addEventListener(
-          eventName,
-          (event) => {
-
-            event.preventDefault();
-
-            element.classList.add(
-              "drag-active"
-            );
-
-          }
-        );
-
-      }
-    );
-
-
-    [
-      "dragleave",
-      "dragend",
-      "drop"
-    ].forEach(
-      (eventName) => {
-
-        element.addEventListener(
-          eventName,
-          (event) => {
-
-            event.preventDefault();
-
-            element.classList.remove(
-              "drag-active"
-            );
-
-          }
-        );
-
-      }
-    );
-
-
-    element.addEventListener(
-      "drop",
-      (event) => {
-
-        const file =
-          event.dataTransfer?.files?.[0];
-
-        if (file) {
-
-          callback(file);
-
-        }
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     SCRIPT STATISTICS
-  ======================================================== */
-
-  function updateScriptStats() {
-
-    if (!lessonScript) return;
-
+    const toast =
+      $("mentorToast");
 
     const text =
-      lessonScript.value || "";
+      $("toastMessage");
 
 
-    const trimmed =
-      text.trim();
+    if (!toast || !text) {
+      return;
+    }
 
 
-    const words =
-      trimmed
-        ? trimmed.split(/\s+/).length
-        : 0;
+    text.textContent =
+      message;
 
 
-    const characters =
-      text.length;
+    toast.classList.remove(
+      "success",
+      "error",
+      "warning",
+      "show"
+    );
 
 
-    if (wordCount) {
+    if (
+      ["success", "error", "warning"]
+        .includes(type)
+    ) {
 
-      wordCount.textContent =
-        `${words} ${words === 1 ? "word" : "words"}`;
+      toast.classList.add(type);
 
     }
 
 
-    if (charCount) {
+    requestAnimationFrame(
+      () => {
 
-      charCount.textContent =
-        `${characters} ${characters === 1 ? "character" : "characters"}`;
+        toast.classList.add(
+          "show"
+        );
 
-    }
-
-  }
-
-
-  /* =======================================================
-     AUTO SAVE
-  ======================================================== */
-
-  function scheduleAutoSave() {
-
-    if (autosaveStatus) {
-
-      autosaveStatus.textContent =
-        "● Saving...";
-
-    }
+      }
+    );
 
 
     clearTimeout(
-      autoSaveTimer
+      showToast.timer
     );
 
 
-    autoSaveTimer =
+    showToast.timer =
       setTimeout(
         () => {
 
-          saveProjectToStorage(
-            false
+          toast.classList.remove(
+            "show"
           );
 
         },
-        AUTOSAVE_DELAY
+        3500
       );
 
   }
 
 
   /* =======================================================
-     SAVE PROJECT
-  ======================================================== */
+     6. FORMAT FILE SIZE
+     ======================================================= */
 
-  function saveProject() {
+  function formatBytes(
+    bytes
+  ) {
 
-    state.savedAt =
-      new Date().toISOString();
+    if (
+      !bytes ||
+      bytes <= 0
+    ) {
+
+      return "0 KB";
+
+    }
 
 
-    saveProjectToStorage(
-      true
-    );
+    const units = [
+
+      "Bytes",
+
+      "KB",
+
+      "MB",
+
+      "GB"
+
+    ];
 
 
-    updateSavedTime();
+    const index =
+      Math.floor(
+        Math.log(bytes) /
+        Math.log(1024)
+      );
 
-    setStudioStatus(
-      "Project saved"
-    );
 
-    showToast(
-      "Project saved successfully."
+    return (
+      (
+        bytes /
+        Math.pow(
+          1024,
+          index
+        )
+      ).toFixed(
+        index === 0
+          ? 0
+          : 1
+      ) +
+      " " +
+      units[
+        Math.min(
+          index,
+          units.length - 1
+        )
+      ]
     );
 
   }
 
 
-  function saveProjectToStorage(
-    notify = false
+  /* =======================================================
+     7. FORMAT DATE
+     ======================================================= */
+
+  function formatDate(
+    date
   ) {
 
-    syncStateFromUI();
+    if (!date) {
+      return "Not saved yet";
+    }
 
 
-    state.savedAt =
-      state.savedAt
-      ||
+    const d =
+      new Date(date);
+
+
+    if (
+      Number.isNaN(
+        d.getTime()
+      )
+    ) {
+
+      return "Not saved yet";
+
+    }
+
+
+    return d.toLocaleString();
+
+  }
+
+
+  /* =======================================================
+     8. WORD COUNT
+     ======================================================= */
+
+  function countWords(
+    text
+  ) {
+
+    if (
+      !text ||
+      !String(text).trim()
+    ) {
+
+      return 0;
+
+    }
+
+
+    return String(text)
+      .trim()
+      .split(/\s+/)
+      .length;
+
+  }
+
+
+  /* =======================================================
+     9. UPDATE SCRIPT COUNTERS
+     ======================================================= */
+
+  function updateScriptCounters() {
+
+    const input =
+      $("lessonScript");
+
+
+    if (!input) {
+      return;
+    }
+
+
+    const text =
+      input.value || "";
+
+
+    const words =
+      countWords(text);
+
+
+    const chars =
+      text.length;
+
+
+    if ($("wordCount")) {
+
+      $("wordCount").textContent =
+        words;
+
+    }
+
+
+    if ($("charCount")) {
+
+      $("charCount").textContent =
+        chars;
+
+    }
+
+  }
+
+
+  /* =======================================================
+     10. SAVE TO LOCAL STORAGE
+     ======================================================= */
+
+  function saveProject(
+    silent = false
+  ) {
+
+    const project =
+      collectProject();
+
+
+    state.lastSavedAt =
       new Date().toISOString();
+
+
+    project.lastSavedAt =
+      state.lastSavedAt;
 
 
     try {
 
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify(state)
+        JSON.stringify(
+          project
+        )
+      );
+
+
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify(
+          state.videoSettings
+        )
       );
 
 
       updateSavedTime();
 
 
-      if (autosaveStatus) {
-
-        autosaveStatus.textContent =
-          "● Auto-save enabled";
-
-      }
-
-
-      if (notify) {
+      if (!silent) {
 
         showToast(
-          "Project saved locally."
+          "Project saved successfully.",
+          "success"
         );
 
       }
 
+
+      return true;
+
     } catch (error) {
 
       console.error(
-        "SNK AI Mentor save error:",
+        "[SNK AI Mentor] Save error:",
         error
       );
 
 
-      if (autosaveStatus) {
-
-        autosaveStatus.textContent =
-          "● Save unavailable";
-
-      }
-
-
-      if (notify) {
+      if (!silent) {
 
         showToast(
-          "Could not save the project.",
+          "Could not save project.",
           "error"
         );
 
       }
 
-    }
 
-  }
-
-
-  /* =======================================================
-     SYNC STATE
-  ======================================================== */
-
-  function syncStateFromUI() {
-
-    if (projectName) {
-
-      state.projectName =
-        projectName.value.trim()
-        ||
-        "Untitled Mentor Project";
-
-    }
-
-
-    if (lessonScript) {
-
-      state.script =
-        lessonScript.value;
-
-    }
-
-
-    if (scriptLanguage) {
-
-      state.language =
-        scriptLanguage.value;
-
-    }
-
-
-    if (scriptStyle) {
-
-      state.style =
-        scriptStyle.value;
-
-    }
-
-
-    if (videoFormat) {
-
-      state.videoFormat =
-        videoFormat.value;
-
-    }
-
-
-    if (videoResolution) {
-
-      state.videoResolution =
-        videoResolution.value;
-
-    }
-
-
-    if (mentorPosition) {
-
-      state.mentorPosition =
-        mentorPosition.value;
-
-    }
-
-
-    if (videoBackground) {
-
-      state.videoBackground =
-        videoBackground.value;
+      return false;
 
     }
 
@@ -1226,12 +425,101 @@
 
 
   /* =======================================================
-     RESTORE PROJECT
-  ======================================================== */
+     11. COLLECT PROJECT
+     ======================================================= */
+
+  function collectProject() {
+
+    const projectName =
+      $("projectName")
+        ? $("projectName").value.trim()
+        : state.projectName;
+
+
+    const script =
+      $("lessonScript")
+        ? $("lessonScript").value
+        : state.script;
+
+
+    return {
+
+      version: 2,
+
+      projectName:
+        projectName ||
+        "My AI Mentor Project",
+
+
+      face: state.faceFile
+        ? {
+
+            name:
+              state.faceFile.name,
+
+            type:
+              state.faceFile.type,
+
+            size:
+              state.faceFile.size
+
+          }
+
+        : null,
+
+
+      voice: state.voiceFile
+        ? {
+
+            name:
+              state.voiceFile.name,
+
+            type:
+              state.voiceFile.type,
+
+            size:
+              state.voiceFile.size
+
+          }
+
+        : null,
+
+
+      script: {
+
+        text:
+          script,
+
+        words:
+          countWords(script),
+
+        characters:
+          script.length
+
+      },
+
+
+      videoSettings:
+        {
+          ...state.videoSettings
+        },
+
+
+      lastSavedAt:
+        state.lastSavedAt
+
+    };
+
+  }
+
+
+  /* =======================================================
+     12. RESTORE PROJECT
+     ======================================================= */
 
   function restoreProject() {
 
-    let stored = null;
+    let saved = null;
 
 
     try {
@@ -1244,7 +532,7 @@
 
       if (raw) {
 
-        stored =
+        saved =
           JSON.parse(raw);
 
       }
@@ -1252,143 +540,115 @@
     } catch (error) {
 
       console.warn(
-        "SNK AI Mentor restore error:",
+        "[SNK AI Mentor] Restore failed:",
         error
       );
 
     }
 
 
-    if (!stored) {
+    if (!saved) {
+
+      restoreSettingsOnly();
 
       return;
 
     }
 
 
-    Object.assign(
-      state,
-      stored
-    );
+    state.projectName =
+      saved.projectName ||
+      "My AI Mentor Project";
 
 
-    if (projectName) {
-
-      projectName.value =
-        state.projectName
-        ||
-        "Untitled Mentor Project";
-
-    }
+    state.lastSavedAt =
+      saved.lastSavedAt ||
+      null;
 
 
-    if (lessonScript) {
+    if ($("projectName")) {
 
-      lessonScript.value =
-        state.script
-        ||
-        "";
+      $("projectName").value =
+        state.projectName;
 
     }
 
 
-    if (
-      scriptLanguage &&
-      state.language
-    ) {
+    if ($("projectNameTop")) {
 
-      scriptLanguage.value =
-        state.language;
+      $("projectNameTop").value =
+        state.projectName;
 
     }
 
 
     if (
-      scriptStyle &&
-      state.style
+      $("lessonScript") &&
+      saved.script
     ) {
 
-      scriptStyle.value =
-        state.style;
+      $("lessonScript").value =
+        saved.script.text || "";
 
     }
 
 
     if (
-      videoFormat &&
-      state.videoFormat
+      saved.videoSettings
     ) {
 
-      videoFormat.value =
-        state.videoFormat;
+      state.videoSettings = {
+
+        ...state.videoSettings,
+
+        ...saved.videoSettings
+
+      };
 
     }
 
 
-    if (
-      videoResolution &&
-      state.videoResolution
-    ) {
+    restoreSettingsToUI();
 
-      videoResolution.value =
-        state.videoResolution;
+    updateScriptCounters();
 
-    }
+    updateSavedTime();
 
-
-    if (
-      mentorPosition &&
-      state.mentorPosition
-    ) {
-
-      mentorPosition.value =
-        state.mentorPosition;
-
-    }
-
-
-    if (
-      videoBackground &&
-      state.videoBackground
-    ) {
-
-      videoBackground.value =
-        state.videoBackground;
-
-    }
+    updateReadiness();
 
 
     /*
-      Browser security does not allow a saved File object
-      to be restored into an <input type="file">.
+     * File objects cannot be restored from localStorage.
+     */
 
-      Therefore only metadata is restored.
-      The user must select the actual media again after
-      refreshing the page.
-    */
-
-    if (state.faceVideo) {
+    if (
+      saved.face &&
+      !state.faceFile
+    ) {
 
       showToast(
-        "Saved project restored. Please re-select the face video.",
-        "info"
+        "Saved project found. Please re-select the mentor face video.",
+        "warning"
       );
 
     }
 
 
-    if (state.voiceAudio) {
+    if (
+      saved.voice &&
+      !state.voiceFile
+    ) {
 
       setTimeout(
         () => {
 
           showToast(
-            "Voice sample metadata restored. Please re-select the audio.",
-            "info"
+            "Please re-select the mentor voice sample.",
+            "warning"
           );
 
         },
-        1800
+        900
       );
 
     }
@@ -1397,23 +657,45 @@
 
 
   /* =======================================================
-     PROJECT NAME
-  ======================================================== */
+     13. RESTORE SETTINGS ONLY
+     ======================================================= */
 
-  function updateProjectName() {
+  function restoreSettingsOnly() {
 
-    const name =
-      projectName?.value.trim()
-      ||
-      state.projectName
-      ||
-      "Untitled Mentor Project";
+    try {
+
+      const raw =
+        localStorage.getItem(
+          SETTINGS_KEY
+        );
 
 
-    if (projectNameTop) {
+      if (!raw) {
+        return;
+      }
 
-      projectNameTop.textContent =
-        name;
+
+      const settings =
+        JSON.parse(raw);
+
+
+      state.videoSettings = {
+
+        ...state.videoSettings,
+
+        ...settings
+
+      };
+
+
+      restoreSettingsToUI();
+
+    } catch (error) {
+
+      console.warn(
+        "[SNK AI Mentor] Settings restore failed:",
+        error
+      );
 
     }
 
@@ -1421,188 +703,93 @@
 
 
   /* =======================================================
-     SAVED TIME
-  ======================================================== */
+     14. RESTORE SETTINGS TO UI
+     ======================================================= */
+
+  function restoreSettingsToUI() {
+
+    setValue(
+      "videoFormat",
+      state.videoSettings.format
+    );
+
+
+    setValue(
+      "videoResolution",
+      state.videoSettings.resolution
+    );
+
+
+    setValue(
+      "mentorPosition",
+      state.videoSettings.mentorPosition
+    );
+
+
+    setValue(
+      "videoBackground",
+      state.videoSettings.background
+    );
+
+  }
+
+
+  /* =======================================================
+     15. SET VALUE
+     ======================================================= */
+
+  function setValue(
+    id,
+    value
+  ) {
+
+    const element =
+      $(id);
+
+
+    if (
+      element &&
+      value !== undefined &&
+      value !== null
+    ) {
+
+      element.value =
+        value;
+
+    }
+
+  }
+
+
+  /* =======================================================
+     16. UPDATE SAVED TIME
+     ======================================================= */
 
   function updateSavedTime() {
 
-    if (!savedTime) return;
+    const element =
+      $("savedTime");
 
 
-    if (!state.savedAt) {
-
-      savedTime.textContent =
-        "Not saved yet";
-
+    if (!element) {
       return;
-
     }
-
-
-    const date =
-      new Date(
-        state.savedAt
-      );
 
 
     if (
-      Number.isNaN(
-        date.getTime()
-      )
+      state.lastSavedAt
     ) {
 
-      savedTime.textContent =
-        "Not saved yet";
-
-      return;
-
-    }
-
-
-    savedTime.textContent =
-      `Saved ${date.toLocaleString()}`;
-
-  }
-
-
-  /* =======================================================
-     READINESS
-  ======================================================== */
-
-  function updateReadiness() {
-
-    const hasFace =
-      Boolean(
-        state.faceVideo
-      );
-
-
-    const hasVoice =
-      Boolean(
-        state.voiceAudio
-      );
-
-
-    const hasScript =
-      Boolean(
-        lessonScript &&
-        lessonScript.value.trim().length >= 5
-      );
-
-
-    const hasSettings =
-      Boolean(
-        videoFormat?.value &&
-        videoResolution?.value
-      );
-
-
-    const checks = [
-      hasFace,
-      hasVoice,
-      hasScript,
-      hasSettings
-    ];
-
-
-    const readyCount =
-      checks.filter(Boolean).length;
-
-
-    const percentage =
-      Math.round(
-        (readyCount / checks.length) * 100
-      );
-
-
-    if (readinessPercent) {
-
-      readinessPercent.textContent =
-        `${percentage}%`;
-
-    }
-
-
-    if (readinessProgress) {
-
-      readinessProgress.style.width =
-        `${percentage}%`;
-
-    }
-
-
-    setCheckState(
-      checkFace,
-      hasFace
-    );
-
-    setCheckState(
-      checkVoice,
-      hasVoice
-    );
-
-    setCheckState(
-      checkScript,
-      hasScript
-    );
-
-    setCheckState(
-      checkSettings,
-      hasSettings
-    );
-
-
-    if (percentage === 100) {
-
-      setStudioStatus(
-        "Ready for AI preparation"
-      );
-
-    } else if (percentage >= 50) {
-
-      setStudioStatus(
-        "Almost ready"
-      );
+      element.textContent =
+        "Saved " +
+        formatDate(
+          state.lastSavedAt
+        );
 
     } else {
 
-      setStudioStatus(
-        "Ready to build"
-      );
-
-    }
-
-  }
-
-
-  function setCheckState(
-    element,
-    ready
-  ) {
-
-    if (!element) return;
-
-
-    element.classList.toggle(
-      "ready",
-      ready
-    );
-
-  }
-
-
-  function updateSettingsStatus() {
-
-    if (
-      videoFormat &&
-      videoResolution
-    ) {
-
-      state.videoFormat =
-        videoFormat.value;
-
-      state.videoResolution =
-        videoResolution.value;
+      element.textContent =
+        "Not saved yet";
 
     }
 
@@ -1610,262 +797,916 @@
 
 
   /* =======================================================
-     CLEAR SCRIPT
-  ======================================================== */
+     17. PROJECT NAME SYNC
+     ======================================================= */
+
+  function syncProjectName(
+    source
+  ) {
+
+    const value =
+      source.value.trim() ||
+      "My AI Mentor Project";
+
+
+    state.projectName =
+      value;
+
+
+    if (
+      $("projectName") &&
+      source !== $("projectName")
+    ) {
+
+      $("projectName").value =
+        value;
+
+    }
+
+
+    if (
+      $("projectNameTop") &&
+      source !== $("projectNameTop")
+    ) {
+
+      $("projectNameTop").value =
+        value;
+
+    }
+
+  }
+
+
+  /* =======================================================
+     18. FACE VIDEO UI
+     ======================================================= */
+
+  function handleFaceVideo(
+    file
+  ) {
+
+    if (!file) {
+      return;
+    }
+
+
+    const Avatar =
+      window.SNKAI.Avatar;
+
+
+    if (!Avatar) {
+
+      showToast(
+        "Avatar engine is not loaded.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    const success =
+      Avatar.setSource(
+        file
+      );
+
+
+    if (!success) {
+
+      const avatarState =
+        Avatar.getState();
+
+
+      showToast(
+        avatarState.error ||
+          "Invalid mentor face video.",
+        "error"
+      );
+
+
+      return;
+
+    }
+
+
+    state.faceFile =
+      file;
+
+
+    renderFacePreview();
+
+    updateReadiness();
+
+
+    showToast(
+      "Mentor face video loaded.",
+      "success"
+    );
+
+  }
+
+
+  /* =======================================================
+     19. RENDER FACE PREVIEW
+     ======================================================= */
+
+  function renderFacePreview() {
+
+    const empty =
+      $("faceUploadEmpty");
+
+
+    const wrapper =
+      $("facePreviewWrapper");
+
+
+    const video =
+      $("faceVideoPreview");
+
+
+    if (
+      !state.faceFile ||
+      !video
+    ) {
+
+      if (empty) {
+        empty.hidden = false;
+      }
+
+      if (wrapper) {
+        wrapper.hidden = true;
+      }
+
+      return;
+
+    }
+
+
+    const Avatar =
+      window.SNKAI.Avatar;
+
+
+    const avatarState =
+      Avatar
+        ? Avatar.getState()
+        : null;
+
+
+    if (
+      avatarState &&
+      avatarState.objectUrl
+    ) {
+
+      video.src =
+        avatarState.objectUrl;
+
+    }
+
+
+    if (empty) {
+      empty.hidden = true;
+    }
+
+
+    if (wrapper) {
+      wrapper.hidden = false;
+    }
+
+  }
+
+
+  /* =======================================================
+     20. REMOVE FACE VIDEO
+     ======================================================= */
+
+  function removeFaceVideo() {
+
+    const Avatar =
+      window.SNKAI.Avatar;
+
+
+    if (Avatar) {
+
+      Avatar.clearSource();
+
+    }
+
+
+    state.faceFile =
+      null;
+
+
+    const video =
+      $("faceVideoPreview");
+
+
+    if (video) {
+
+      video.pause();
+
+      video.removeAttribute(
+        "src"
+      );
+
+      video.load();
+
+    }
+
+
+    if ($("facePreviewWrapper")) {
+
+      $("facePreviewWrapper")
+        .hidden = true;
+
+    }
+
+
+    if ($("faceUploadEmpty")) {
+
+      $("faceUploadEmpty")
+        .hidden = false;
+
+    }
+
+
+    updateReadiness();
+
+
+    showToast(
+      "Mentor face video removed.",
+      "info"
+    );
+
+  }
+
+
+  /* =======================================================
+     21. VOICE AUDIO UI
+     ======================================================= */
+
+  function handleVoiceAudio(
+    file
+  ) {
+
+    if (!file) {
+      return;
+    }
+
+
+    const Voice =
+      window.SNKAI.Voice;
+
+
+    if (!Voice) {
+
+      showToast(
+        "Voice engine is not loaded.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    const success =
+      Voice.setSource(
+        file
+      );
+
+
+    if (!success) {
+
+      const voiceState =
+        Voice.getState();
+
+
+      showToast(
+        voiceState.error ||
+          "Invalid voice sample.",
+        "error"
+      );
+
+
+      return;
+
+    }
+
+
+    state.voiceFile =
+      file;
+
+
+    renderVoicePreview();
+
+    updateReadiness();
+
+
+    showToast(
+      "Mentor voice sample loaded.",
+      "success"
+    );
+
+  }
+
+
+  /* =======================================================
+     22. RENDER VOICE PREVIEW
+     ======================================================= */
+
+  function renderVoicePreview() {
+
+    const empty =
+      $("voiceUploadEmpty");
+
+
+    const preview =
+      $("voicePreview");
+
+
+    const player =
+      $("voiceAudioPlayer");
+
+
+    if (
+      !state.voiceFile ||
+      !player
+    ) {
+
+      if (empty) {
+        empty.hidden = false;
+      }
+
+      if (preview) {
+        preview.hidden = true;
+      }
+
+      return;
+
+    }
+
+
+    const Voice =
+      window.SNKAI.Voice;
+
+
+    const voiceState =
+      Voice
+        ? Voice.getState()
+        : null;
+
+
+    if (
+      voiceState &&
+      voiceState.objectUrl
+    ) {
+
+      player.src =
+        voiceState.objectUrl;
+
+    }
+
+
+    if ($("voiceFileName")) {
+
+      $("voiceFileName")
+        .textContent =
+        state.voiceFile.name;
+
+    }
+
+
+    if ($("voiceFileMeta")) {
+
+      $("voiceFileMeta")
+        .textContent =
+        formatBytes(
+          state.voiceFile.size
+        );
+
+    }
+
+
+    if (empty) {
+      empty.hidden = true;
+    }
+
+
+    if (preview) {
+      preview.hidden = false;
+    }
+
+  }
+
+
+  /* =======================================================
+     23. REMOVE VOICE
+     ======================================================= */
+
+  function removeVoice() {
+
+    const Voice =
+      window.SNKAI.Voice;
+
+
+    if (Voice) {
+
+      Voice.clearSource();
+
+    }
+
+
+    state.voiceFile =
+      null;
+
+
+    const player =
+      $("voiceAudioPlayer");
+
+
+    if (player) {
+
+      player.pause();
+
+      player.removeAttribute(
+        "src"
+      );
+
+      player.load();
+
+    }
+
+
+    if ($("voicePreview")) {
+
+      $("voicePreview")
+        .hidden = true;
+
+    }
+
+
+    if ($("voiceUploadEmpty")) {
+
+      $("voiceUploadEmpty")
+        .hidden = false;
+
+    }
+
+
+    updateReadiness();
+
+
+    showToast(
+      "Mentor voice sample removed.",
+      "info"
+    );
+
+  }
+
+
+  /* =======================================================
+     24. SCRIPT INPUT
+     ======================================================= */
+
+  function handleScriptInput() {
+
+    const input =
+      $("lessonScript");
+
+
+    if (!input) {
+      return;
+    }
+
+
+    state.script =
+      input.value;
+
+
+    updateScriptCounters();
+
+    updateReadiness();
+
+  }
+
+
+  /* =======================================================
+     25. CLEAR SCRIPT
+     ======================================================= */
 
   function clearScript() {
 
-    if (!lessonScript) return;
+    const input =
+      $("lessonScript");
 
 
-    const hasContent =
-      lessonScript.value.trim().length > 0;
-
-
-    if (!hasContent) {
-
-      showToast(
-        "The script is already empty.",
-        "info"
-      );
-
+    if (!input) {
       return;
+    }
+
+
+    if (
+      input.value.trim()
+    ) {
+
+      const confirmed =
+        window.confirm(
+          "Clear the entire lesson script?"
+        );
+
+
+      if (!confirmed) {
+        return;
+      }
 
     }
 
 
-    const confirmed =
-      window.confirm(
-        "Clear the entire lesson script?"
-      );
-
-
-    if (!confirmed) {
-
-      return;
-
-    }
-
-
-    lessonScript.value =
+    input.value =
       "";
+
 
     state.script =
       "";
 
 
-    updateScriptStats();
+    updateScriptCounters();
 
     updateReadiness();
 
-    scheduleAutoSave();
-
 
     showToast(
-      "Lesson script cleared."
+      "Lesson script cleared.",
+      "info"
     );
 
   }
 
 
   /* =======================================================
-     EXPORT PROJECT
-  ======================================================== */
+     26. VIDEO SETTINGS
+     ======================================================= */
 
-  function exportProject() {
+  function handleVideoSettings() {
 
-    syncStateFromUI();
+    state.videoSettings = {
 
+      ...state.videoSettings,
 
-    const exportData = {
+      format:
+        getValue(
+          "videoFormat",
+          state.videoSettings.format
+        ),
 
-      app:
-        "SNK AI Mentor",
+      resolution:
+        getValue(
+          "videoResolution",
+          state.videoSettings.resolution
+        ),
 
-      version:
-        "1.0",
+      mentorPosition:
+        getValue(
+          "mentorPosition",
+          state.videoSettings.mentorPosition
+        ),
 
-      exportedAt:
-        new Date().toISOString(),
-
-      project: {
-
-        name:
-          state.projectName,
-
-        script:
-          state.script,
-
-        language:
-          state.language,
-
-        teachingStyle:
-          state.style,
-
-        video: {
-
-          format:
-            state.videoFormat,
-
-          resolution:
-            state.videoResolution,
-
-          mentorPosition:
-            state.mentorPosition,
-
-          background:
-            state.videoBackground
-
-        },
-
-        media: {
-
-          faceVideo:
-            state.faceVideo,
-
-          voiceAudio:
-            state.voiceAudio
-
-        }
-
-      }
+      background:
+        getValue(
+          "videoBackground",
+          state.videoSettings.background
+        )
 
     };
 
 
-    const json =
-      JSON.stringify(
-        exportData,
-        null,
-        2
-      );
+    /*
+     * Sync with Video engine.
+     */
+
+    const Video =
+      window.SNKAI.Video;
 
 
-    const blob =
-      new Blob(
-        [json],
-        {
-          type:
-            "application/json"
-        }
-      );
+    if (Video) {
+
+      Video.setSettings({
+
+        format:
+          state.videoSettings.format,
+
+        resolution:
+          state.videoSettings.resolution,
+
+        mentorPosition:
+          state.videoSettings
+            .mentorPosition,
+
+        background:
+          state.videoSettings
+            .background,
+
+        aspectRatio:
+          state.videoSettings
+            .aspectRatio,
+
+        fps:
+          state.videoSettings
+            .fps,
+
+        subtitles:
+          state.videoSettings
+            .subtitles,
+
+        audio:
+          state.videoSettings
+            .audio
+
+      });
+
+    }
 
 
-    const url =
-      URL.createObjectURL(
-        blob
-      );
-
-
-    const anchor =
-      document.createElement(
-        "a"
-      );
-
-
-    anchor.href =
-      url;
-
-    anchor.download =
-      `${safeFileName(
-        state.projectName
-      ) || "snk-ai-mentor-project"}.json`;
-
-
-    document.body.appendChild(
-      anchor
+    saveProject(
+      true
     );
 
 
-    anchor.click();
-
-
-    anchor.remove();
-
-
-    URL.revokeObjectURL(
-      url
-    );
-
-
-    showToast(
-      "Project exported as JSON."
-    );
+    updateReadiness();
 
   }
 
 
   /* =======================================================
-     PREPARE AI VIDEO
-  ======================================================== */
+     27. GET VALUE
+     ======================================================= */
 
-  function prepareAIVideo() {
+  function getValue(
+    id,
+    fallback
+  ) {
 
-    syncStateFromUI();
+    const element =
+      $(id);
 
-    updateReadiness();
+
+    return element
+      ? element.value
+      : fallback;
+
+  }
 
 
-    const hasFace =
+  /* =======================================================
+     28. READINESS
+     ======================================================= */
+
+  function updateReadiness() {
+
+    const faceReady =
       Boolean(
-        state.faceVideo
+        state.faceFile
       );
 
 
-    const hasVoice =
+    const voiceReady =
       Boolean(
-        state.voiceAudio
+        state.voiceFile
       );
 
 
-    const hasScript =
+    const scriptReady =
       Boolean(
-        state.script.trim()
+        (
+          $("lessonScript")
+            ? $("lessonScript").value
+            : state.script
+        ).trim()
       );
 
 
-    if (!hasFace) {
+    const settingsReady =
+      Boolean(
+        state.videoSettings.format &&
+        state.videoSettings.resolution
+      );
+
+
+    const checks = [
+
+      faceReady,
+
+      voiceReady,
+
+      scriptReady,
+
+      settingsReady
+
+    ];
+
+
+    const completed =
+      checks.filter(Boolean)
+        .length;
+
+
+    const percent =
+      Math.round(
+        (
+          completed /
+          checks.length
+        ) * 100
+      );
+
+
+    setText(
+      "readinessPercent",
+      percent + "%"
+    );
+
+
+    const progress =
+      $("readinessProgress");
+
+
+    if (progress) {
+
+      progress.style.width =
+        percent + "%";
+
+    }
+
+
+    setCheck(
+      "checkFace",
+      faceReady
+    );
+
+
+    setCheck(
+      "checkVoice",
+      voiceReady
+    );
+
+
+    setCheck(
+      "checkScript",
+      scriptReady
+    );
+
+
+    setCheck(
+      "checkSettings",
+      settingsReady
+    );
+
+
+    setText(
+      "studioStatus",
+      percent === 100
+        ? "Ready"
+        : "Setup Required"
+    );
+
+
+    if (
+      percent === 100
+    ) {
+
+      state.videoPrepared =
+        false;
+
+    }
+
+
+    return percent;
+
+  }
+
+
+  /* =======================================================
+     29. SET CHECK STATE
+     ======================================================= */
+
+  function setCheck(
+    id,
+    completed
+  ) {
+
+    const element =
+      $(id);
+
+
+    if (!element) {
+      return;
+    }
+
+
+    element.classList.toggle(
+      "complete",
+      Boolean(completed)
+    );
+
+
+    element.classList.toggle(
+      "pending",
+      !completed
+    );
+
+
+    const icon =
+      element.querySelector(
+        "[data-check-icon]"
+      );
+
+
+    if (icon) {
+
+      icon.textContent =
+        completed
+          ? "✓"
+          : "○";
+
+    }
+
+  }
+
+
+  /* =======================================================
+     30. SET TEXT
+     ======================================================= */
+
+  function setText(
+    id,
+    value
+  ) {
+
+    const element =
+      $(id);
+
+
+    if (element) {
+
+      element.textContent =
+        value;
+
+    }
+
+  }
+
+
+  /* =======================================================
+     31. PREPARE AI VIDEO
+     ======================================================= */
+
+  async function prepareAIVideo() {
+
+    const percent =
+      updateReadiness();
+
+
+    if (
+      percent < 100
+    ) {
 
       showToast(
-        "Please upload your face video first.",
-        "error"
+        "Complete Face, Voice, Script and Video Settings first.",
+        "warning"
       );
 
-      scrollToElement(
-        faceUploadArea
-      );
+
+      scrollToFirstMissing();
+
 
       return;
 
     }
 
 
-    if (!hasVoice) {
+    const Avatar =
+      window.SNKAI.Avatar;
+
+
+    const Voice =
+      window.SNKAI.Voice;
+
+
+    const Video =
+      window.SNKAI.Video;
+
+
+    if (
+      !Avatar ||
+      !Voice ||
+      !Video
+    ) {
 
       showToast(
-        "Please upload your voice sample first.",
+        "AI engine files are not loaded.",
         "error"
       );
 
-      scrollToElement(
-        voiceUploadArea
-      );
-
-      return;
-
-    }
-
-
-    if (!hasScript) {
-
-      showToast(
-        "Please write your lesson script first.",
-        "error"
-      );
-
-      scrollToElement(
-        lessonScript
-      );
 
       return;
 
@@ -1873,84 +1714,349 @@
 
 
     /*
-      This is intentionally a preparation layer.
+     * Make sure Video engine has the latest script.
+     */
 
-      Actual AI avatar generation will later connect to:
-      ai/ai-config.js
-      ai/avatar.js
-      ai/voice.js
-      ai/video.js
-
-      No API key is placed in this browser-side file.
-    */
-
-
-    setStudioStatus(
-      "Preparing AI workflow..."
+    Video.setScript(
+      $("lessonScript")
+        ? $("lessonScript").value
+        : state.script
     );
 
 
-    if (prepareVideoBtn) {
+    Video.setSettings(
+      state.videoSettings
+    );
 
-      prepareVideoBtn.disabled =
+
+    /*
+     * Provider status.
+     */
+
+    const provider =
+      window.SNKAI.AIConfig
+        ? window.SNKAI.AIConfig.getProvider()
+        : null;
+
+
+    const config =
+      window.SNKAI.AIConfig
+        ? window.SNKAI.AIConfig.getConfig()
+        : null;
+
+
+    const mode =
+      config
+        ? config.mode
+        : "demo";
+
+
+    const providerName =
+      provider
+        ? provider.label
+        : "AI Provider";
+
+
+    /*
+     * Show preparation modal.
+     */
+
+    const modal =
+      createPreparationModal(
+        providerName,
+        mode
+      );
+
+
+    try {
+
+      updatePreparationModal(
+        modal,
+        "Checking mentor face...",
+        15
+      );
+
+
+      /*
+       * Avatar validation
+       */
+
+      const avatarCheck =
+        Avatar.checkProvider();
+
+
+      if (
+        !avatarCheck.available &&
+        mode !== "demo"
+      ) {
+
+        throw new Error(
+          avatarCheck.message
+        );
+
+      }
+
+
+      updatePreparationModal(
+        modal,
+        "Checking mentor voice...",
+        30
+      );
+
+
+      /*
+       * Voice validation
+       */
+
+      const voiceCheck =
+        Voice.checkProvider();
+
+
+      if (
+        !voiceCheck.available &&
+        mode !== "demo"
+      ) {
+
+        throw new Error(
+          voiceCheck.message
+        );
+
+      }
+
+
+      updatePreparationModal(
+        modal,
+        "Preparing lesson script...",
+        45
+      );
+
+
+      const script =
+        $("lessonScript")
+          ? $("lessonScript").value
+          : state.script;
+
+
+      Video.setScript(
+        script
+      );
+
+
+      updatePreparationModal(
+        modal,
+        "Preparing AI video job...",
+        60
+      );
+
+
+      state.videoPrepared =
         true;
 
-      prepareVideoBtn.innerHTML =
-        "<span>⟳</span> Preparing...";
+
+      state.videoStatus =
+        "preparing";
+
+
+      /*
+       * Start actual Video engine.
+       */
+
+      const result =
+        await Video.generate({
+
+          mentorName:
+            state.projectName,
+
+          video:
+            state.videoSettings
+
+        });
+
+
+      state.videoJobId =
+        result.jobId ||
+        null;
+
+
+      state.videoProgress =
+        100;
+
+
+      state.videoStatus =
+        result.success
+          ? "completed"
+          : "error";
+
+
+      if (
+        result.success
+      ) {
+
+        updatePreparationModal(
+          modal,
+          result.demo
+            ? "Demo video workflow completed."
+            : "AI video generation completed.",
+          100
+        );
+
+
+        setTimeout(
+          () => {
+
+            closePreparationModal(
+              modal
+            );
+
+
+            if (
+              result.videoUrl
+            ) {
+
+              showVideoResult(
+                result.videoUrl
+              );
+
+            } else {
+
+              showToast(
+                result.demo
+                  ? "Demo job completed. Real AI provider is ready to be connected."
+                  : "AI video job completed.",
+                "success"
+              );
+
+            }
+
+          },
+          900
+        );
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "[SNK AI Mentor] AI video error:",
+        error
+      );
+
+
+      state.videoStatus =
+        "error";
+
+
+      state.videoPrepared =
+        false;
+
+
+      updatePreparationModal(
+        modal,
+        error.message ||
+          "AI video preparation failed.",
+        100,
+        true
+      );
+
+
+      showToast(
+        error.message ||
+          "AI video preparation failed.",
+        "error"
+      );
 
     }
-
-
-    setTimeout(
-      () => {
-
-        if (prepareVideoBtn) {
-
-          prepareVideoBtn.disabled =
-            false;
-
-          prepareVideoBtn.innerHTML =
-            "<span>✦</span> Prepare AI Video <span>→</span>";
-
-        }
-
-
-        setStudioStatus(
-          "AI workflow prepared"
-        );
-
-
-        showToast(
-          "Project is ready for AI provider integration."
-        );
-
-
-        showPreparationDialog();
-
-      },
-      1200
-    );
 
   }
 
 
   /* =======================================================
-     PREPARATION DIALOG
-  ======================================================== */
+     32. SCROLL TO FIRST MISSING
+     ======================================================= */
 
-  function showPreparationDialog() {
+  function scrollToFirstMissing() {
 
-    const existing =
-      document.querySelector(
-        ".ai-preparation-modal"
+    const ids = [
+
+      [
+        "checkFace",
+        "faceUploadArea"
+      ],
+
+      [
+        "checkVoice",
+        "voiceUploadArea"
+      ],
+
+      [
+        "checkScript",
+        "lessonScript"
+      ],
+
+      [
+        "checkSettings",
+        "videoFormat"
+      ]
+
+    ];
+
+
+    for (
+      const [checkId, targetId]
+      of ids
+    ) {
+
+      const check =
+        $(checkId);
+
+
+      if (
+        check &&
+        !check.classList.contains(
+          "complete"
+        )
+      ) {
+
+        const target =
+          $(targetId);
+
+
+        if (target) {
+
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+
+        }
+
+
+        return;
+
+      }
+
+    }
+
+  }
+
+
+  /* =======================================================
+     33. PREPARATION MODAL
+     ======================================================= */
+
+  function createPreparationModal(
+    providerName,
+    mode
+  ) {
+
+    const backdrop =
+      document.createElement(
+        "div"
       );
 
 
-    if (existing) {
-
-      existing.remove();
-
-    }
+    backdrop.className =
+      "ai-preparation-backdrop";
 
 
     const modal =
@@ -1964,7 +2070,6 @@
 
 
     modal.innerHTML = `
-      <div class="ai-preparation-backdrop"></div>
 
       <div class="ai-preparation-box">
 
@@ -1980,69 +2085,386 @@
           ✦
         </div>
 
-        <span class="ai-preparation-kicker">
-          AI VIDEO WORKFLOW
-        </span>
+        <div class="ai-preparation-kicker">
+          SNK AI MENTOR
+        </div>
 
         <h3>
-          Your project is prepared
+          Preparing AI Video
         </h3>
 
-        <p>
-          The face, voice and lesson script are ready.
-          The next stage will connect this project to an
-          external AI avatar and voice provider.
+        <p class="ai-preparation-provider">
+          ${escapeHtml(providerName)}
+          ·
+          ${escapeHtml(
+            mode === "demo"
+              ? "Demo Mode"
+              : "Live Mode"
+          )}
         </p>
 
-        <div class="ai-preparation-list">
-
-          <div>
-            <span>✓</span>
-            <strong>Face identity ready</strong>
-          </div>
-
-          <div>
-            <span>✓</span>
-            <strong>Voice identity ready</strong>
-          </div>
-
-          <div>
-            <span>✓</span>
-            <strong>Lesson script ready</strong>
-          </div>
-
-          <div>
-            <span>✓</span>
-            <strong>Video settings ready</strong>
-          </div>
-
+        <div class="ai-preparation-progress">
+          <span></span>
         </div>
+
+        <div class="ai-preparation-percent">
+          0%
+        </div>
+
+        <p class="ai-preparation-status">
+          Starting...
+        </p>
+
+        <ul class="ai-preparation-list">
+
+          <li data-step="face">
+            <span>○</span>
+            Mentor Face
+          </li>
+
+          <li data-step="voice">
+            <span>○</span>
+            Mentor Voice
+          </li>
+
+          <li data-step="script">
+            <span>○</span>
+            Lesson Script
+          </li>
+
+          <li data-step="video">
+            <span>○</span>
+            Video Job
+          </li>
+
+        </ul>
 
         <div class="ai-preparation-actions">
 
           <button
             type="button"
-            class="ai-modal-primary"
-            data-action="continue"
-          >
-            Continue to AI Setup →
-          </button>
-
-          <button
-            type="button"
             class="ai-modal-secondary"
-            data-action="close"
           >
             Close
           </button>
 
         </div>
 
-        <small>
-          API integration will be added in the next AI module steps.
-        </small>
+      </div>
+
+    `;
+
+
+    backdrop.appendChild(
+      modal
+    );
+
+
+    document.body.appendChild(
+      backdrop
+    );
+
+
+    const closeButtons =
+      modal.querySelectorAll(
+        ".ai-preparation-close, .ai-modal-secondary"
+      );
+
+
+    closeButtons.forEach(
+      button => {
+
+        button.addEventListener(
+          "click",
+          () => {
+
+            closePreparationModal(
+              backdrop
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+    requestAnimationFrame(
+      () => {
+
+        backdrop.classList.add(
+          "show"
+        );
+
+      }
+    );
+
+
+    return backdrop;
+
+  }
+
+
+  /* =======================================================
+     34. UPDATE PREPARATION MODAL
+     ======================================================= */
+
+  function updatePreparationModal(
+    backdrop,
+    message,
+    progress,
+    error = false
+  ) {
+
+    if (!backdrop) {
+      return;
+    }
+
+
+    const bar =
+      backdrop.querySelector(
+        ".ai-preparation-progress span"
+      );
+
+
+    const percent =
+      backdrop.querySelector(
+        ".ai-preparation-percent"
+      );
+
+
+    const status =
+      backdrop.querySelector(
+        ".ai-preparation-status"
+      );
+
+
+    if (bar) {
+
+      bar.style.width =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            progress
+          )
+        ) + "%";
+
+    }
+
+
+    if (percent) {
+
+      percent.textContent =
+        Math.round(progress) +
+        "%";
+
+    }
+
+
+    if (status) {
+
+      status.textContent =
+        message;
+
+
+      status.classList.toggle(
+        "error",
+        Boolean(error)
+      );
+
+    }
+
+
+    /*
+     * Update workflow items.
+     */
+
+    const steps = [
+
+      [
+        "face",
+        25
+      ],
+
+      [
+        "voice",
+        50
+      ],
+
+      [
+        "script",
+        60
+      ],
+
+      [
+        "video",
+        100
+      ]
+
+    ];
+
+
+    steps.forEach(
+      ([name, threshold]) => {
+
+        const item =
+          backdrop.querySelector(
+            `[data-step="${name}"]`
+          );
+
+
+        if (!item) {
+          return;
+        }
+
+
+        const icon =
+          item.querySelector(
+            "span"
+          );
+
+
+        const complete =
+          progress >= threshold &&
+          !error;
+
+
+        item.classList.toggle(
+          "complete",
+          complete
+        );
+
+
+        if (icon) {
+
+          icon.textContent =
+            complete
+              ? "✓"
+              : "○";
+
+        }
+
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     35. CLOSE MODAL
+     ======================================================= */
+
+  function closePreparationModal(
+    backdrop
+  ) {
+
+    if (!backdrop) {
+      return;
+    }
+
+
+    backdrop.classList.remove(
+      "show"
+    );
+
+
+    setTimeout(
+      () => {
+
+        backdrop.remove();
+
+      },
+      250
+    );
+
+  }
+
+
+  /* =======================================================
+     36. VIDEO RESULT
+     ======================================================= */
+
+  function showVideoResult(
+    videoUrl
+  ) {
+
+    if (!videoUrl) {
+      return;
+    }
+
+
+    const modal =
+      document.createElement(
+        "div"
+      );
+
+
+    modal.className =
+      "ai-preparation-backdrop show";
+
+
+    modal.innerHTML = `
+
+      <div class="ai-preparation-modal">
+
+        <div class="ai-preparation-box">
+
+          <button
+            type="button"
+            class="ai-preparation-close"
+            aria-label="Close"
+          >
+            ×
+          </button>
+
+          <div class="ai-preparation-icon">
+            ✓
+          </div>
+
+          <div class="ai-preparation-kicker">
+            GENERATION COMPLETE
+          </div>
+
+          <h3>
+            Your AI Video Is Ready
+          </h3>
+
+          <div class="ai-video-result">
+
+            <video
+              controls
+              playsinline
+              preload="metadata"
+              src="${escapeHtml(videoUrl)}"
+            ></video>
+
+          </div>
+
+          <div class="ai-preparation-actions">
+
+            <button
+              type="button"
+              class="ai-modal-primary"
+              data-download-video
+            >
+              Download Video
+            </button>
+
+            <button
+              type="button"
+              class="ai-modal-secondary"
+              data-close-video
+            >
+              Close
+            </button>
+
+          </div>
+
+        </div>
 
       </div>
+
     `;
 
 
@@ -2051,334 +2473,876 @@
     );
 
 
-    requestAnimationFrame(
-      () => {
+    const video =
+      modal.querySelector(
+        "video"
+      );
 
-        modal.classList.add(
-          "show"
-        );
 
-      }
-    );
+    if (video) {
+
+      video.addEventListener(
+        "error",
+        () => {
+
+          showToast(
+            "The generated video URL could not be played.",
+            "error"
+          );
+
+        }
+      );
+
+    }
 
 
     const close =
+      modal.querySelector(
+        ".ai-preparation-close"
+      );
+
+
+    const closeButton =
+      modal.querySelector(
+        "[data-close-video]"
+      );
+
+
+    const download =
+      modal.querySelector(
+        "[data-download-video]"
+      );
+
+
+    const closeResult =
       () => {
 
-        modal.classList.remove(
-          "show"
-        );
-
-
-        setTimeout(
-          () => {
-
-            modal.remove();
-
-          },
-          220
-        );
+        modal.remove();
 
       };
 
 
-    modal
-      .querySelector(
-        ".ai-preparation-close"
-      )
-      ?.addEventListener(
+    if (close) {
+
+      close.addEventListener(
         "click",
-        close
+        closeResult
       );
 
+    }
 
-    modal
-      .querySelector(
-        ".ai-preparation-backdrop"
-      )
-      ?.addEventListener(
+
+    if (closeButton) {
+
+      closeButton.addEventListener(
         "click",
-        close
+        closeResult
       );
 
-
-    modal
-      .querySelector(
-        '[data-action="close"]'
-      )
-      ?.addEventListener(
-        "click",
-        close
-      );
+    }
 
 
-    modal
-      .querySelector(
-        '[data-action="continue"]'
-      )
-      ?.addEventListener(
+    if (download) {
+
+      download.addEventListener(
         "click",
         () => {
 
-          close();
+          const Video =
+            window.SNKAI.Video;
 
-          showToast(
-            "AI Setup module will be connected next."
-          );
+
+          if (Video) {
+
+            Video.download(
+              "snk-ai-mentor-video.mp4"
+            );
+
+          } else {
+
+            window.open(
+              videoUrl,
+              "_blank"
+            );
+
+          }
 
         }
       );
 
+    }
 
-    const escapeHandler =
-      (event) => {
+  }
 
-        if (
-          event.key === "Escape"
-        ) {
 
-          close();
+  /* =======================================================
+     37. EXPORT PROJECT
+     ======================================================= */
 
-          document.removeEventListener(
-            "keydown",
-            escapeHandler
-          );
+  function exportProject() {
 
+    const project =
+      collectProject();
+
+
+    const blob =
+      new Blob(
+        [
+          JSON.stringify(
+            project,
+            null,
+            2
+          )
+        ],
+        {
+          type:
+            "application/json"
         }
+      );
 
-      };
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
 
 
-    document.addEventListener(
-      "keydown",
-      escapeHandler
+    const link =
+      document.createElement(
+        "a"
+      );
+
+
+    link.href =
+      url;
+
+
+    link.download =
+      createFileName(
+        state.projectName
+      ) +
+      ".json";
+
+
+    document.body.appendChild(
+      link
+    );
+
+
+    link.click();
+
+    link.remove();
+
+
+    URL.revokeObjectURL(
+      url
+    );
+
+
+    showToast(
+      "Project JSON exported.",
+      "success"
     );
 
   }
 
 
   /* =======================================================
-     STUDIO STATUS
-  ======================================================== */
+     38. CREATE FILE NAME
+     ======================================================= */
 
-  function setStudioStatus(
-    message
+  function createFileName(
+    name
   ) {
 
-    if (!studioStatus) return;
-
-
-    studioStatus.textContent =
-      message;
+    return String(
+      name ||
+        "snk-ai-mentor-project"
+    )
+      .trim()
+      .replace(
+        /[<>:"/\\|?*\x00-\x1F]/g,
+        ""
+      )
+      .replace(
+        /\s+/g,
+        "-"
+      )
+      .slice(
+        0,
+        80
+      ) ||
+      "snk-ai-mentor-project";
 
   }
 
 
   /* =======================================================
-     TOAST
-  ======================================================== */
+     39. ESCAPE HTML
+     ======================================================= */
 
-  let toastTimer = null;
-
-
-  function showToast(
-    message,
-    type = "success"
-  ) {
-
-    if (!mentorToast) return;
-
-
-    if (toastMessage) {
-
-      toastMessage.textContent =
-        message;
-
-    }
-
-
-    const icon =
-      mentorToast.querySelector(
-        ".toast-icon"
-      );
-
-
-    if (icon) {
-
-      if (type === "error") {
-
-        icon.textContent =
-          "!";
-
-      } else if (type === "info") {
-
-        icon.textContent =
-          "i";
-
-      } else {
-
-        icon.textContent =
-          "✓";
-
-      }
-
-    }
-
-
-    mentorToast.classList.add(
-      "show"
-    );
-
-
-    clearTimeout(
-      toastTimer
-    );
-
-
-    toastTimer =
-      setTimeout(
-        () => {
-
-          mentorToast.classList.remove(
-            "show"
-          );
-
-        },
-        3000
-      );
-
-  }
-
-
-  /* =======================================================
-     SCROLL
-  ======================================================== */
-
-  function scrollToElement(
-    element
-  ) {
-
-    if (!element) return;
-
-
-    element.scrollIntoView({
-      behavior:
-        "smooth",
-
-      block:
-        "center"
-    });
-
-  }
-
-
-  /* =======================================================
-     FORMAT BYTES
-  ======================================================== */
-
-  function formatBytes(
-    bytes
-  ) {
-
-    if (!Number.isFinite(bytes)) {
-
-      return "0 Bytes";
-
-    }
-
-
-    if (bytes === 0) {
-
-      return "0 Bytes";
-
-    }
-
-
-    const units = [
-      "Bytes",
-      "KB",
-      "MB",
-      "GB"
-    ];
-
-
-    const index =
-      Math.floor(
-        Math.log(bytes) /
-        Math.log(1024)
-      );
-
-
-    const safeIndex =
-      Math.min(
-        index,
-        units.length - 1
-      );
-
-
-    const value =
-      bytes /
-      Math.pow(
-        1024,
-        safeIndex
-      );
-
-
-    return `${value.toFixed(
-      safeIndex === 0 ? 0 : 1
-    )} ${units[safeIndex]}`;
-
-  }
-
-
-  /* =======================================================
-     SAFE FILE NAME
-  ======================================================== */
-
-  function safeFileName(
+  function escapeHtml(
     value
   ) {
 
     return String(
       value || ""
     )
-      .trim()
       .replace(
-        /[<>:"/\\|?*\x00-\x1F]/g,
-        "-"
+        /&/g,
+        "&amp;"
       )
       .replace(
-        /\s+/g,
-        "-"
+        /</g,
+        "&lt;"
       )
       .replace(
-        /-+/g,
-        "-"
+        />/g,
+        "&gt;"
       )
-      .slice(
-        0,
-        100
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+      .replace(
+        /'/g,
+        "&#039;"
       );
 
   }
 
 
   /* =======================================================
-     GLOBAL API
-  ======================================================== */
+     40. DRAG & DROP
+     ======================================================= */
 
-  window.SNKAI =
-    window.SNKAI || {};
+  function setupDropZone(
+    areaId,
+    inputId,
+    callback
+  ) {
 
+    const area =
+      $(areaId);
+
+
+    const input =
+      $(inputId);
+
+
+    if (!area || !input) {
+      return;
+    }
+
+
+    area.addEventListener(
+      "dragover",
+      event => {
+
+        event.preventDefault();
+
+        area.classList.add(
+          "dragover"
+        );
+
+      }
+    );
+
+
+    area.addEventListener(
+      "dragleave",
+      () => {
+
+        area.classList.remove(
+          "dragover"
+        );
+
+      }
+    );
+
+
+    area.addEventListener(
+      "drop",
+      event => {
+
+        event.preventDefault();
+
+        area.classList.remove(
+          "dragover"
+        );
+
+
+        const file =
+          event.dataTransfer &&
+          event.dataTransfer.files
+            ? event.dataTransfer.files[0]
+            : null;
+
+
+        if (file) {
+
+          callback(file);
+
+        }
+
+      }
+    );
+
+
+    input.addEventListener(
+      "change",
+      () => {
+
+        const file =
+          input.files &&
+          input.files[0]
+            ? input.files[0]
+            : null;
+
+
+        if (file) {
+
+          callback(file);
+
+        }
+
+
+        input.value =
+          "";
+
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     41. BUTTON EVENTS
+     ======================================================= */
+
+  function setupEvents() {
+
+    /*
+     * Face upload
+     */
+
+    setupDropZone(
+      "faceUploadArea",
+      "faceVideoInput",
+      handleFaceVideo
+    );
+
+
+    /*
+     * Voice upload
+     */
+
+    setupDropZone(
+      "voiceUploadArea",
+      "voiceInput",
+      handleVoiceAudio
+    );
+
+
+    /*
+     * Face buttons
+     */
+
+    if ($("selectFaceVideoBtn")) {
+
+      $("selectFaceVideoBtn")
+        .addEventListener(
+          "click",
+          () => {
+
+            $("faceVideoInput")
+              ?.click();
+
+          }
+        );
+
+    }
+
+
+    if ($("changeFaceVideoBtn")) {
+
+      $("changeFaceVideoBtn")
+        .addEventListener(
+          "click",
+          () => {
+
+            $("faceVideoInput")
+              ?.click();
+
+          }
+        );
+
+    }
+
+
+    /*
+     * Voice buttons
+     */
+
+    if ($("selectVoiceBtn")) {
+
+      $("selectVoiceBtn")
+        .addEventListener(
+          "click",
+          () => {
+
+            $("voiceInput")
+              ?.click();
+
+          }
+        );
+
+    }
+
+
+    if ($("removeVoiceBtn")) {
+
+      $("removeVoiceBtn")
+        .addEventListener(
+          "click",
+          removeVoice
+        );
+
+    }
+
+
+    /*
+     * Script
+     */
+
+    if ($("lessonScript")) {
+
+      $("lessonScript")
+        .addEventListener(
+          "input",
+          handleScriptInput
+        );
+
+    }
+
+
+    if ($("clearScriptBtn")) {
+
+      $("clearScriptBtn")
+        .addEventListener(
+          "click",
+          clearScript
+        );
+
+    }
+
+
+    /*
+     * Project name
+     */
+
+    if ($("projectName")) {
+
+      $("projectName")
+        .addEventListener(
+          "input",
+          event =>
+            syncProjectName(
+              event.target
+            )
+        );
+
+    }
+
+
+    if ($("projectNameTop")) {
+
+      $("projectNameTop")
+        .addEventListener(
+          "input",
+          event =>
+            syncProjectName(
+              event.target
+            )
+        );
+
+    }
+
+
+    /*
+     * Save buttons
+     */
+
+    if ($("saveProjectBtn")) {
+
+      $("saveProjectBtn")
+        .addEventListener(
+          "click",
+          () => saveProject()
+        );
+
+    }
+
+
+    if ($("sidebarSaveBtn")) {
+
+      $("sidebarSaveBtn")
+        .addEventListener(
+          "click",
+          () => saveProject()
+        );
+
+    }
+
+
+    /*
+     * Export
+     */
+
+    if ($("exportProjectBtn")) {
+
+      $("exportProjectBtn")
+        .addEventListener(
+          "click",
+          exportProject
+        );
+
+    }
+
+
+    /*
+     * Prepare AI Video
+     */
+
+    if ($("prepareVideoBtn")) {
+
+      $("prepareVideoBtn")
+        .addEventListener(
+          "click",
+          prepareAIVideo
+        );
+
+    }
+
+
+    /*
+     * Video settings
+     */
+
+    [
+
+      "videoFormat",
+
+      "videoResolution",
+
+      "mentorPosition",
+
+      "videoBackground"
+
+    ].forEach(
+      id => {
+
+        const element =
+          $(id);
+
+
+        if (element) {
+
+          element.addEventListener(
+            "change",
+            handleVideoSettings
+          );
+
+        }
+
+      }
+    );
+
+
+    /*
+     * Auto-save
+     */
+
+    document.addEventListener(
+      "input",
+      event => {
+
+        if (
+          event.target &&
+          event.target.id ===
+            "lessonScript"
+        ) {
+
+          clearTimeout(
+            setupEvents.autoSaveTimer
+          );
+
+
+          setupEvents.autoSaveTimer =
+            setTimeout(
+              () => {
+
+                saveProject(
+                  true
+                );
+
+                setText(
+                  "autosaveStatus",
+                  "Auto-saved"
+                );
+
+              },
+              1200
+            );
+
+        }
+
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     42. ENGINE EVENT CONNECTION
+     ======================================================= */
+
+  function connectEngineEvents() {
+
+    const Video =
+      window.SNKAI.Video;
+
+
+    if (!Video) {
+      return;
+    }
+
+
+    Video.on(
+      "generationStarted",
+      () => {
+
+        state.videoStatus =
+          "processing";
+
+
+        state.videoProgress =
+          5;
+
+
+        showToast(
+          "AI video generation started.",
+          "info"
+        );
+
+      }
+    );
+
+
+    Video.on(
+      "progress",
+      data => {
+
+        state.videoProgress =
+          Number(
+            data.progress
+          ) || 0;
+
+
+        state.videoStatus =
+          data.status ||
+          "processing";
+
+      }
+    );
+
+
+    Video.on(
+      "queued",
+      data => {
+
+        state.videoStatus =
+          "queued";
+
+
+        state.videoJobId =
+          data.jobId ||
+          null;
+
+      }
+    );
+
+
+    Video.on(
+      "generationCompleted",
+      data => {
+
+        state.videoStatus =
+          "completed";
+
+
+        state.videoProgress =
+          100;
+
+
+        state.videoJobId =
+          data.jobId ||
+          null;
+
+      }
+    );
+
+
+    Video.on(
+      "error",
+      data => {
+
+        state.videoStatus =
+          "error";
+
+
+        state.videoProgress =
+          0;
+
+
+        console.error(
+          "[SNK AI Mentor]",
+          data
+        );
+
+      }
+    );
+
+
+    Video.on(
+      "cancelled",
+      () => {
+
+        state.videoStatus =
+          "cancelled";
+
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     43. KEYBOARD SHORTCUTS
+     ======================================================= */
+
+  function setupKeyboard() {
+
+    document.addEventListener(
+      "keydown",
+      event => {
+
+        /*
+         * Ctrl/Cmd + S
+         */
+
+        if (
+          (
+            event.ctrlKey ||
+            event.metaKey
+          ) &&
+          event.key.toLowerCase() ===
+            "s"
+        ) {
+
+          event.preventDefault();
+
+          saveProject();
+
+        }
+
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     44. INITIALIZE
+     ======================================================= */
+
+  function init() {
+
+    if (
+      state.initialized
+    ) {
+
+      return;
+
+    }
+
+
+    state.initialized =
+      true;
+
+
+    setupEvents();
+
+    setupKeyboard();
+
+    connectEngineEvents();
+
+    restoreProject();
+
+    updateScriptCounters();
+
+    updateReadiness();
+
+
+    /*
+     * Sync Video engine with current UI.
+     */
+
+    const Video =
+      window.SNKAI.Video;
+
+
+    if (Video) {
+
+      Video.setScript(
+        $("lessonScript")
+          ? $("lessonScript").value
+          : ""
+      );
+
+
+      Video.setSettings(
+        state.videoSettings
+      );
+
+    }
+
+
+    console.log(
+      "[SNK AI Mentor] Mentor Studio initialized."
+    );
+
+  }
+
+
+  /* =======================================================
+     45. PUBLIC API
+     ======================================================= */
 
   window.SNKAI.MentorStudio = {
 
     getState() {
 
-      syncStateFromUI();
-
       return {
-        ...state
+
+        ...state,
+
+        videoSettings: {
+
+          ...state.videoSettings
+
+        }
+
       };
 
     },
@@ -2386,43 +3350,54 @@
 
     save() {
 
-      saveProject();
+      return saveProject();
 
     },
 
 
     exportProject() {
 
-      exportProject();
+      return exportProject();
 
     },
 
 
     prepareVideo() {
 
-      prepareAIVideo();
+      return prepareAIVideo();
 
     },
 
 
-    showToast(
-      message,
-      type
-    ) {
+    clearFace() {
 
-      showToast(
-        message,
-        type
-      );
+      return removeFaceVideo();
 
-    }
+    },
+
+
+    clearVoice() {
+
+      return removeVoice();
+
+    },
+
+
+    clearScript() {
+
+      return clearScript();
+
+    },
+
+
+    showToast
 
   };
 
 
   /* =======================================================
-     START
-  ======================================================== */
+     46. START
+     ======================================================= */
 
   if (
     document.readyState ===
@@ -2433,7 +3408,7 @@
       "DOMContentLoaded",
       init,
       {
-        once:true
+        once: true
       }
     );
 
@@ -2442,5 +3417,6 @@
     init();
 
   }
+
 
 })();
