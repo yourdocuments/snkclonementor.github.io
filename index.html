@@ -1,1 +1,871 @@
-#
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>SNK AI Mentor | Your Face. Your Voice. Your Mentor.</title>
+
+  <meta
+    name="description"
+    content="SNK AI Mentor — create your personal AI teaching mentor using your own face, voice and lesson scripts."
+  >
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- =====================================================
+       BACKGROUND
+  ====================================================== -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow glow-one"></div>
+  <div class="bg-glow glow-two"></div>
+
+  <!-- =====================================================
+       HEADER
+  ====================================================== -->
+  <header class="site-header">
+
+    <div class="header-inner">
+
+      <a href="index.html" class="brand">
+
+        <div class="brand-mark">
+          <span>SNK</span>
+        </div>
+
+        <div class="brand-text">
+          <strong>SNK AI Mentor</strong>
+          <small>Personal Digital Teacher</small>
+        </div>
+
+      </a>
+
+      <nav class="main-nav">
+
+        <a href="#home" class="active">Home</a>
+        <a href="#workflow">How It Works</a>
+        <a href="#features">Features</a>
+        <a href="#studio">AI Studio</a>
+
+      </nav>
+
+      <div class="header-actions">
+
+        <button
+          type="button"
+          class="icon-button"
+          id="themeButton"
+          aria-label="Toggle theme"
+        >
+          ◐
+        </button>
+
+        <a href="mentor/ai-mentor.html" class="header-button">
+          Open AI Studio
+          <span>→</span>
+        </a>
+
+      </div>
+
+      <button
+        type="button"
+        class="mobile-menu-button"
+        id="mobileMenuButton"
+        aria-label="Open menu"
+      >
+        ☰
+      </button>
+
+    </div>
+
+    <!-- Mobile Navigation -->
+
+    <div class="mobile-nav" id="mobileNav">
+
+      <a href="#home">Home</a>
+      <a href="#workflow">How It Works</a>
+      <a href="#features">Features</a>
+      <a href="#studio">AI Studio</a>
+
+      <a href="mentor/ai-mentor.html" class="mobile-cta">
+        Open AI Studio →
+      </a>
+
+    </div>
+
+  </header>
+
+
+  <!-- =====================================================
+       HERO
+  ====================================================== -->
+  <main>
+
+    <section class="hero-section" id="home">
+
+      <div class="hero-container">
+
+        <!-- LEFT -->
+
+        <div class="hero-content">
+
+          <div class="eyebrow">
+            <span class="status-dot"></span>
+            PERSONAL AI MENTOR
+          </div>
+
+          <h1>
+            Your Face.
+            <span>Your Voice.</span>
+            <strong>Your Digital Mentor.</strong>
+          </h1>
+
+          <p class="hero-description">
+            Create a personal AI teaching assistant using your own
+            face, voice and lesson scripts — designed for modern
+            online course production.
+          </p>
+
+          <div class="hero-actions">
+
+            <a
+              href="mentor/ai-mentor.html"
+              class="primary-button"
+            >
+              <span class="button-icon">✦</span>
+              Create My AI Mentor
+              <span class="arrow">→</span>
+            </a>
+
+            <a
+              href="#workflow"
+              class="secondary-button"
+            >
+              See How It Works
+            </a>
+
+          </div>
+
+          <div class="hero-note">
+            <span>✓</span>
+            Built for personal course production
+          </div>
+
+        </div>
+
+
+        <!-- RIGHT — AI VISUAL -->
+
+        <div class="hero-visual">
+
+          <div class="visual-orbit orbit-one"></div>
+          <div class="visual-orbit orbit-two"></div>
+
+          <div class="mentor-card">
+
+            <div class="mentor-card-top">
+
+              <div class="live-indicator">
+                <span></span>
+                AI MENTOR
+              </div>
+
+              <div class="mentor-status">
+                READY
+              </div>
+
+            </div>
+
+            <div class="avatar-stage">
+
+              <div class="avatar-ring ring-one"></div>
+              <div class="avatar-ring ring-two"></div>
+
+              <div class="avatar-placeholder">
+
+                <div class="avatar-head">
+                  <div class="avatar-hair"></div>
+
+                  <div class="avatar-face">
+
+                    <div class="eye eye-left"></div>
+                    <div class="eye eye-right"></div>
+
+                    <div class="nose"></div>
+
+                    <div class="mouth"></div>
+
+                  </div>
+
+                </div>
+
+                <div class="avatar-body">
+                  <div class="shirt"></div>
+                </div>
+
+              </div>
+
+              <div class="scan-line"></div>
+
+            </div>
+
+            <div class="mentor-card-bottom">
+
+              <div>
+                <small>MENTOR PROFILE</small>
+                <strong>Personal AI Teacher</strong>
+              </div>
+
+              <div class="voice-wave">
+
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- Floating Cards -->
+
+          <div class="floating-card face-card">
+
+            <div class="floating-icon">◉</div>
+
+            <div>
+              <small>FACE</small>
+              <strong>Your Avatar</strong>
+            </div>
+
+            <span class="check">✓</span>
+
+          </div>
+
+
+          <div class="floating-card voice-card">
+
+            <div class="floating-icon">♫</div>
+
+            <div>
+              <small>VOICE</small>
+              <strong>Your Voice</strong>
+            </div>
+
+            <span class="check">✓</span>
+
+          </div>
+
+
+          <div class="floating-card script-card">
+
+            <div class="floating-icon">Aa</div>
+
+            <div>
+              <small>SCRIPT</small>
+              <strong>Lesson Text</strong>
+            </div>
+
+            <span class="check">✓</span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         TRUST / STATS
+    ====================================================== -->
+
+    <section class="stats-section">
+
+      <div class="stats-container">
+
+        <div class="stat-item">
+          <strong>01</strong>
+          <span>Your Face</span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <div class="stat-item">
+          <strong>02</strong>
+          <span>Your Voice</span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <div class="stat-item">
+          <strong>03</strong>
+          <span>Your Script</span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <div class="stat-item">
+          <strong>04</strong>
+          <span>AI Production</span>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         WORKFLOW
+    ====================================================== -->
+
+    <section class="workflow-section" id="workflow">
+
+      <div class="section-heading">
+
+        <div class="section-label">
+          SIMPLE WORKFLOW
+        </div>
+
+        <h2>
+          From Your Recording
+          <span>to Your AI Mentor</span>
+        </h2>
+
+        <p>
+          Prepare your personal AI identity and use it to create
+          future lessons without recording every lesson from scratch.
+        </p>
+
+      </div>
+
+
+      <div class="workflow-grid">
+
+        <!-- STEP 01 -->
+
+        <article class="workflow-card">
+
+          <div class="step-number">
+            01
+          </div>
+
+          <div class="workflow-icon">
+            ◉
+          </div>
+
+          <h3>Train Your Face</h3>
+
+          <p>
+            Upload a suitable personal video sample that can be
+            used as the source for your digital mentor.
+          </p>
+
+          <span class="workflow-tag">
+            FACE
+          </span>
+
+        </article>
+
+
+        <!-- STEP 02 -->
+
+        <article class="workflow-card">
+
+          <div class="step-number">
+            02
+          </div>
+
+          <div class="workflow-icon">
+            ♫
+          </div>
+
+          <h3>Prepare Your Voice</h3>
+
+          <p>
+            Provide a clean voice sample so a compatible AI voice
+            system can reproduce your teaching voice.
+          </p>
+
+          <span class="workflow-tag">
+            VOICE
+          </span>
+
+        </article>
+
+
+        <!-- STEP 03 -->
+
+        <article class="workflow-card">
+
+          <div class="step-number">
+            03
+          </div>
+
+          <div class="workflow-icon">
+            Aa
+          </div>
+
+          <h3>Write Your Lesson</h3>
+
+          <p>
+            Add your course script, lecture notes or lesson text
+            inside the AI Mentor Studio.
+          </p>
+
+          <span class="workflow-tag">
+            SCRIPT
+          </span>
+
+        </article>
+
+
+        <!-- STEP 04 -->
+
+        <article class="workflow-card">
+
+          <div class="step-number">
+            04
+          </div>
+
+          <div class="workflow-icon">
+            ✦
+          </div>
+
+          <h3>Create AI Video</h3>
+
+          <p>
+            Connect an AI avatar and voice provider to turn your
+            prepared lesson into a mentor video.
+          </p>
+
+          <span class="workflow-tag">
+            VIDEO
+          </span>
+
+        </article>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         FEATURES
+    ====================================================== -->
+
+    <section class="features-section" id="features">
+
+      <div class="section-heading">
+
+        <div class="section-label">
+          AI MENTOR PLATFORM
+        </div>
+
+        <h2>
+          Everything in
+          <span>One Studio</span>
+        </h2>
+
+        <p>
+          A clean workspace for preparing your face, voice,
+          lessons and future AI-generated course videos.
+        </p>
+
+      </div>
+
+
+      <div class="features-grid">
+
+        <div class="feature-card large">
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              ◉
+            </div>
+
+            <span>01</span>
+
+          </div>
+
+          <h3>Personal Avatar</h3>
+
+          <p>
+            Keep your own visual identity at the center of the
+            teaching experience.
+          </p>
+
+          <div class="feature-line"></div>
+
+          <small>
+            YOUR DIGITAL PRESENCE
+          </small>
+
+        </div>
+
+
+        <div class="feature-card">
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              ♫
+            </div>
+
+            <span>02</span>
+
+          </div>
+
+          <h3>Voice System</h3>
+
+          <p>
+            Prepare your own voice sample for compatible AI voice
+            generation services.
+          </p>
+
+        </div>
+
+
+        <div class="feature-card">
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              Aa
+            </div>
+
+            <span>03</span>
+
+          </div>
+
+          <h3>Lesson Scripts</h3>
+
+          <p>
+            Create, save and organize lesson scripts before
+            generating your course videos.
+          </p>
+
+        </div>
+
+
+        <div class="feature-card">
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              ▣
+            </div>
+
+            <span>04</span>
+
+          </div>
+
+          <h3>Video Production</h3>
+
+          <p>
+            Prepare the complete production workflow for future
+            AI-generated teaching videos.
+          </p>
+
+        </div>
+
+
+        <div class="feature-card">
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              ◫
+            </div>
+
+            <span>05</span>
+
+          </div>
+
+          <h3>Project Storage</h3>
+
+          <p>
+            Organize mentor settings, lesson scripts and project
+            information in one workspace.
+          </p>
+
+        </div>
+
+
+        <div class="feature-card premium-card">
+
+          <div class="premium-glow"></div>
+
+          <div class="feature-top">
+
+            <div class="feature-icon">
+              ✦
+            </div>
+
+            <span>06</span>
+
+          </div>
+
+          <h3>AI Production Pipeline</h3>
+
+          <p>
+            Connect the studio to an external AI provider when
+            you're ready for real avatar and voice generation.
+          </p>
+
+          <a href="mentor/ai-mentor.html">
+            Open Studio →
+          </a>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         STUDIO CTA
+    ====================================================== -->
+
+    <section class="studio-section" id="studio">
+
+      <div class="studio-container">
+
+        <div class="studio-copy">
+
+          <div class="section-label">
+            YOUR PRIVATE AI STUDIO
+          </div>
+
+          <h2>
+            Ready to build
+            <span>your digital mentor?</span>
+          </h2>
+
+          <p>
+            Start by preparing your face video, voice sample and
+            first lesson script.
+          </p>
+
+          <a
+            href="mentor/ai-mentor.html"
+            class="primary-button"
+          >
+            <span class="button-icon">✦</span>
+            Launch AI Mentor Studio
+            <span class="arrow">→</span>
+          </a>
+
+        </div>
+
+
+        <div class="studio-preview">
+
+          <div class="preview-header">
+
+            <div class="preview-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+
+            <small>
+              SNK AI MENTOR / STUDIO
+            </small>
+
+          </div>
+
+
+          <div class="preview-body">
+
+            <div class="preview-sidebar">
+
+              <div class="side-active">
+                <span>◉</span>
+                Avatar
+              </div>
+
+              <div>
+                <span>♫</span>
+                Voice
+              </div>
+
+              <div>
+                <span>Aa</span>
+                Script
+              </div>
+
+              <div>
+                <span>▣</span>
+                Video
+              </div>
+
+            </div>
+
+
+            <div class="preview-main">
+
+              <div class="preview-title">
+                <small>AI MENTOR</small>
+                <strong>Personal Teaching Studio</strong>
+              </div>
+
+              <div class="preview-progress">
+
+                <div class="progress-step completed">
+                  <span>✓</span>
+                  Face
+                </div>
+
+                <div class="progress-line"></div>
+
+                <div class="progress-step completed">
+                  <span>✓</span>
+                  Voice
+                </div>
+
+                <div class="progress-line"></div>
+
+                <div class="progress-step current">
+                  <span>3</span>
+                  Script
+                </div>
+
+                <div class="progress-line"></div>
+
+                <div class="progress-step">
+                  <span>4</span>
+                  Video
+                </div>
+
+              </div>
+
+
+              <div class="preview-script">
+
+                <div class="script-toolbar">
+
+                  <span>LESSON SCRIPT</span>
+
+                  <span class="saved">
+                    ● Auto saved
+                  </span>
+
+                </div>
+
+                <div class="fake-lines">
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         PRIVACY NOTE
+    ====================================================== -->
+
+    <section class="privacy-section">
+
+      <div class="privacy-box">
+
+        <div class="privacy-icon">
+          🔒
+        </div>
+
+        <div>
+
+          <h3>Your Identity, Your Control</h3>
+
+          <p>
+            Only use face and voice samples that belong to you or
+            that you have permission to use. AI provider processing
+            and storage policies should be reviewed before uploading
+            personal media.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- =====================================================
+       FOOTER
+  ====================================================== -->
+
+  <footer class="site-footer">
+
+    <div class="footer-inner">
+
+      <div class="footer-brand">
+
+        <div class="brand-mark">
+          <span>SNK</span>
+        </div>
+
+        <div>
+          <strong>SNK AI Mentor</strong>
+          <small>Your Personal Digital Teacher</small>
+        </div>
+
+      </div>
+
+
+      <div class="footer-links">
+
+        <a href="#home">Home</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#features">Features</a>
+        <a href="mentor/ai-mentor.html">AI Studio</a>
+
+      </div>
+
+
+      <div class="footer-copy">
+        © <span id="currentYear"></span> SNK AI Mentor
+      </div>
+
+    </div>
+
+  </footer>
+
+
+  <!-- =====================================================
+       SCRIPT
+  ====================================================== -->
+
+  <script src="script.js"></script>
+
+</body>
+</html>
