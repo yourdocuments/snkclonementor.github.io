@@ -1,1677 +1,941 @@
 /* =========================================================
-   SNK AI MENTOR
+   SNK AI Mentor
    ai/voice.js
-   ---------------------------------------------------------
-   AI VOICE ENGINE
-   ---------------------------------------------------------
+
+   STEP 27 — Voice Sample Engine
 
    Responsibilities:
-   1. Voice sample upload
-   2. Audio validation
-   3. Voice preview
-   4. Voice profile management
-   5. Language / voice settings
-   6. Voice generation payload
-   7. Demo voice-generation workflow
-   8. Future secure API integration
-   9. Event system for other modules
+   - Voice sample upload
+   - Audio validation
+   - File size validation
+   - Audio metadata detection
+   - Preview URL creation
+   - Readiness state
+   - Provider-independent payload
+   - FormData helper
+   - Provider preparation
+   - Events
+   - Safe reset / clear
 
    IMPORTANT:
-   Private API keys must NEVER be placed in this file.
-   Real voice cloning/generation should be handled by a
-   secure backend and a compatible AI voice provider.
+   This browser-side engine does NOT clone a voice.
+   Actual voice cloning / voice synthesis must happen through
+   an authorized external AI provider or your secure backend.
+
+   Supported provider labels:
+   - demo
+   - custom
+   - heygen
+   - synthesia
+   - d-id
+
+   No API key or raw audio file is stored in localStorage.
    ========================================================= */
 
 (() => {
-
   "use strict";
 
-
   /* ---------------------------------------------------------
-     1. GLOBAL NAMESPACE
+     1. Namespace
      --------------------------------------------------------- */
 
   window.SNKAI = window.SNKAI || {};
 
+  const EVENTS = {};
 
   /* ---------------------------------------------------------
-     2. INTERNAL STATE
+     2. Constants
+     --------------------------------------------------------- */
+
+  const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
+
+  const SUPPORTED_EXTENSIONS = [
+    "mp3",
+    "wav",
+    "m4a",
+    "aac",
+    "ogg",
+    "oga",
+    "webm",
+    "flac"
+  ];
+
+  const SUPPORTED_MIME_TYPES = [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
+    "audio/x-pn-wav",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/aac",
+    "audio/ogg",
+    "audio/oga",
+    "audio/webm",
+    "audio/flac",
+    "audio/x-flac"
+  ];
+
+  const SUPPORTED_PROVIDERS = [
+    {
+      id: "demo",
+      name: "Demo Engine",
+      live: false,
+      description: "Local browser demo mode."
+    },
+    {
+      id: "custom",
+      name: "Custom API",
+      live: true,
+      description: "Connect your own secure backend."
+    },
+    {
+      id: "heygen",
+      name: "HeyGen",
+      live: true,
+      description: "External avatar and voice platform."
+    },
+    {
+      id: "synthesia",
+      name: "Synthesia",
+      live: true,
+      description: "External AI video platform."
+    },
+    {
+      id: "d-id",
+      name: "D-ID",
+      live: true,
+      description: "External talking-avatar platform."
+    }
+  ];
+
+  /* ---------------------------------------------------------
+     3. Internal state
      --------------------------------------------------------- */
 
   const state = {
-
-    initialized: false,
-
-    source: null,
-
-    sourceType: "audio",
-
-    fileName: "",
-
-    fileSize: 0,
-
-    fileType: "",
-
-    objectUrl: "",
-
     ready: false,
+    loading: false,
 
-    processing: false,
+    file: null,
+    previewUrl: "",
 
-    progress: 0,
+    metadata: {
+      name: "",
+      size: 0,
+      sizeLabel: "",
+      type: "",
+      extension: "",
+      duration: 0,
+      durationLabel: "",
+      lastModified: 0
+    },
 
-    jobId: null,
+    error: "",
+    provider: "demo",
 
-    generatedAudioUrl: "",
-
-    error: null,
-
-    settings: {
-
-      language: "auto",
-
-      voiceStyle: "natural",
-
-      speed: 1,
-
-      pitch: 0,
-
-      emotion: "neutral",
-
-      stability: 0.7,
-
-      clarity: 0.8,
-
-      enabled: true
-
-    }
-
+    loadedAt: null
   };
 
-
   /* ---------------------------------------------------------
-     3. EVENT SYSTEM
+     4. Utility
      --------------------------------------------------------- */
 
-  const events = {};
+  function emit(eventName, detail = {}) {
+    const listeners = EVENTS[eventName];
 
+    if (!listeners || !listeners.length) {
+      return;
+    }
+
+    listeners.slice().forEach((listener) => {
+      try {
+        listener(detail);
+      } catch (error) {
+        console.error(
+          "[SNK AI Voice] Event listener error:",
+          error
+        );
+      }
+    });
+  }
 
   function on(eventName, callback) {
-
     if (typeof callback !== "function") {
-      return;
+      return () => {};
     }
 
-    if (!events[eventName]) {
-      events[eventName] = [];
-    }
+    EVENTS[eventName] = EVENTS[eventName] || [];
+    EVENTS[eventName].push(callback);
 
-    events[eventName].push(callback);
-
-  }
-
-
-  function off(eventName, callback) {
-
-    if (!events[eventName]) {
-      return;
-    }
-
-    events[eventName] =
-      events[eventName].filter(
-        fn => fn !== callback
-      );
-
-  }
-
-
-  function emit(eventName, data = {}) {
-
-    if (!events[eventName]) {
-      return;
-    }
-
-    events[eventName].forEach(
-      callback => {
-
-        try {
-
-          callback(data);
-
-        } catch (err) {
-
-          console.error(
-            "[SNK AI Voice]",
-            err
-          );
-
-        }
-
-      }
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     4. FILE VALIDATION
-     --------------------------------------------------------- */
-
-  function validateAudioFile(file) {
-
-    const result = {
-
-      valid: false,
-
-      error: "",
-
-      file: file || null
-
+    return () => {
+      EVENTS[eventName] =
+        (EVENTS[eventName] || []).filter(
+          (listener) => listener !== callback
+        );
     };
-
-
-    if (!file) {
-
-      result.error =
-        "No mentor voice sample selected.";
-
-      return result;
-
-    }
-
-
-    if (!file.type) {
-
-      result.error =
-        "The selected audio type could not be detected.";
-
-      return result;
-
-    }
-
-
-    if (!file.type.startsWith("audio/")) {
-
-      result.error =
-        "Please select a valid audio file.";
-
-      return result;
-
-    }
-
-
-    const config =
-      window.SNKAI.AIConfig
-        ? window.SNKAI.AIConfig.getConfig()
-        : null;
-
-
-    const maxMB =
-      config &&
-      config.limits &&
-      config.limits.voiceAudioMB
-        ? config.limits.voiceAudioMB
-        : 200;
-
-
-    const maxBytes =
-      maxMB * 1024 * 1024;
-
-
-    if (file.size > maxBytes) {
-
-      result.error =
-        `Audio is too large. Maximum allowed size is ${maxMB} MB.`;
-
-      return result;
-
-    }
-
-
-    result.valid = true;
-
-    return result;
-
   }
 
-
-  /* ---------------------------------------------------------
-     5. SET VOICE SOURCE
-     --------------------------------------------------------- */
-
-  function setSource(file) {
-
-    const validation =
-      validateAudioFile(file);
-
-
-    if (!validation.valid) {
-
-      state.error =
-        validation.error;
-
-      state.ready = false;
-
-      emit(
-        "error",
-        {
-          message:
-            validation.error
-        }
-      );
-
-      return false;
-
-    }
-
-
-    clearObjectUrl();
-
-
-    state.source = file;
-
-    state.sourceType = "audio";
-
-    state.fileName = file.name;
-
-    state.fileSize = file.size;
-
-    state.fileType = file.type;
-
-    state.objectUrl =
-      URL.createObjectURL(file);
-
-    state.ready = true;
-
-    state.error = null;
-
-    state.progress = 100;
-
-
-    emit(
-      "sourceChanged",
-      getState()
-    );
-
-
-    emit(
-      "ready",
-      getState()
-    );
-
-
-    return true;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     6. CLEAR SOURCE
-     --------------------------------------------------------- */
-
-  function clearSource() {
-
-    clearObjectUrl();
-
-
-    state.source = null;
-
-    state.fileName = "";
-
-    state.fileSize = 0;
-
-    state.fileType = "";
-
-    state.objectUrl = "";
-
+  function setError(message) {
+    state.error = String(message || "");
     state.ready = false;
 
-    state.processing = false;
-
-    state.progress = 0;
-
-    state.jobId = null;
-
-    state.generatedAudioUrl = "";
-
-    state.error = null;
-
-
-    emit(
-      "sourceCleared",
-      getState()
-    );
-
+    emit("error", {
+      message: state.error,
+      state: getState()
+    });
   }
 
+  function clearError() {
+    state.error = "";
+  }
 
-  /* ---------------------------------------------------------
-     7. OBJECT URL CLEANUP
-     --------------------------------------------------------- */
+  function getExtension(fileName = "") {
+    const parts = String(fileName).toLowerCase().split(".");
 
-  function clearObjectUrl() {
-
-    if (state.objectUrl) {
-
-      try {
-
-        URL.revokeObjectURL(
-          state.objectUrl
-        );
-
-      } catch (err) {
-
-        console.warn(
-          "[SNK AI Voice] URL cleanup failed.",
-          err
-        );
-
-      }
-
+    if (parts.length < 2) {
+      return "";
     }
 
+    return parts.pop();
   }
 
+  function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
 
-  /* ---------------------------------------------------------
-     8. GENERATED AUDIO CLEANUP
-     --------------------------------------------------------- */
-
-  function clearGeneratedAudio() {
-
-    if (state.generatedAudioUrl) {
-
-      try {
-
-        URL.revokeObjectURL(
-          state.generatedAudioUrl
-        );
-
-      } catch (err) {
-
-        console.warn(
-          "[SNK AI Voice] Generated audio cleanup failed.",
-          err
-        );
-
-      }
-
+    if (value <= 0) {
+      return "0 B";
     }
 
+    const units = ["B", "KB", "MB", "GB"];
 
-    state.generatedAudioUrl = "";
-
-  }
-
-
-  /* ---------------------------------------------------------
-     9. SET ALL SETTINGS
-     --------------------------------------------------------- */
-
-  function setSettings(newSettings = {}) {
-
-    state.settings = {
-
-      ...state.settings,
-
-      ...newSettings
-
-    };
-
-
-    normalizeSettings();
-
-
-    emit(
-      "settingsChanged",
-      getSettings()
+    const index = Math.min(
+      Math.floor(Math.log(value) / Math.log(1024)),
+      units.length - 1
     );
 
+    const size = value / Math.pow(1024, index);
 
-    return getSettings();
-
+    return `${size.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
   }
 
+  function formatDuration(seconds) {
+    const total = Math.max(
+      0,
+      Math.round(Number(seconds) || 0)
+    );
 
-  /* ---------------------------------------------------------
-     10. SET SINGLE SETTING
-     --------------------------------------------------------- */
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
 
-  function setSetting(key, value) {
+    if (hours > 0) {
+      return [
+        String(hours).padStart(2, "0"),
+        String(minutes).padStart(2, "0"),
+        String(secs).padStart(2, "0")
+      ].join(":");
+    }
 
-    if (!key) {
+    return [
+      String(minutes).padStart(2, "0"),
+      String(secs).padStart(2, "0")
+    ].join(":");
+  }
+
+  function isAudioFile(file) {
+    if (!file) {
       return false;
     }
 
+    const mime = String(file.type || "").toLowerCase();
+    const extension = getExtension(file.name);
 
-    state.settings[key] =
-      value;
+    const mimeAccepted =
+      mime.startsWith("audio/") ||
+      SUPPORTED_MIME_TYPES.includes(mime);
 
+    const extensionAccepted =
+      SUPPORTED_EXTENSIONS.includes(extension);
 
-    normalizeSettings();
-
-
-    emit(
-      "settingsChanged",
-      getSettings()
-    );
-
-
-    return true;
-
+    return mimeAccepted || extensionAccepted;
   }
 
-
   /* ---------------------------------------------------------
-     11. NORMALIZE SETTINGS
+     5. File validation
      --------------------------------------------------------- */
 
-  function normalizeSettings() {
+  function validateFile(file) {
+    const errors = [];
 
-    /* Speed */
-
-    const speed =
-      Number(state.settings.speed);
-
-
-    if (
-      !Number.isFinite(speed)
-    ) {
-
-      state.settings.speed = 1;
-
-    } else {
-
-      state.settings.speed =
-        Math.max(
-          0.5,
-          Math.min(
-            2,
-            speed
-          )
-        );
-
+    if (!file) {
+      errors.push("Please select a voice sample.");
+      return {
+        valid: false,
+        errors
+      };
     }
 
-
-    /* Pitch */
-
-    const pitch =
-      Number(state.settings.pitch);
-
-
-    if (
-      !Number.isFinite(pitch)
-    ) {
-
-      state.settings.pitch = 0;
-
-    } else {
-
-      state.settings.pitch =
-        Math.max(
-          -12,
-          Math.min(
-            12,
-            pitch
-          )
-        );
-
+    if (!isAudioFile(file)) {
+      errors.push(
+        "Unsupported audio format. Use MP3, WAV, M4A, AAC, OGG, WEBM or FLAC."
+      );
     }
 
-
-    /* Stability */
-
-    const stability =
-      Number(state.settings.stability);
-
-
-    if (
-      !Number.isFinite(stability)
-    ) {
-
-      state.settings.stability =
-        0.7;
-
-    } else {
-
-      state.settings.stability =
-        Math.max(
-          0,
-          Math.min(
-            1,
-            stability
-          )
-        );
-
+    if (file.size > MAX_FILE_SIZE) {
+      errors.push(
+        `Voice sample is too large. Maximum size is ${formatBytes(
+          MAX_FILE_SIZE
+        )}.`
+      );
     }
 
-
-    /* Clarity */
-
-    const clarity =
-      Number(state.settings.clarity);
-
-
-    if (
-      !Number.isFinite(clarity)
-    ) {
-
-      state.settings.clarity =
-        0.8;
-
-    } else {
-
-      state.settings.clarity =
-        Math.max(
-          0,
-          Math.min(
-            1,
-            clarity
-          )
-        );
-
+    if (file.size <= 0) {
+      errors.push("The selected audio file is empty.");
     }
 
+    return {
+      valid: errors.length === 0,
+      errors,
+      maxSize: MAX_FILE_SIZE,
+      maxSizeLabel: formatBytes(MAX_FILE_SIZE)
+    };
+  }
 
-    state.settings.enabled =
-      Boolean(
-        state.settings.enabled
+  /* ---------------------------------------------------------
+     6. Audio metadata
+     --------------------------------------------------------- */
+
+  function readAudioMetadata(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error("No audio file supplied."));
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      const audio = document.createElement("audio");
+
+      let finished = false;
+
+      const cleanup = () => {
+        audio.removeAttribute("src");
+
+        try {
+          audio.load();
+        } catch (_) {}
+
+        URL.revokeObjectURL(url);
+      };
+
+      const success = () => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        const duration = Number(audio.duration);
+
+        cleanup();
+
+        resolve({
+          duration:
+            Number.isFinite(duration) && duration > 0
+              ? duration
+              : 0
+        });
+      };
+
+      const failure = () => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        cleanup();
+
+        reject(
+          new Error(
+            "Could not read audio metadata from this file."
+          )
+        );
+      };
+
+      audio.preload = "metadata";
+
+      audio.addEventListener(
+        "loadedmetadata",
+        success,
+        { once: true }
       );
 
+      audio.addEventListener(
+        "error",
+        failure,
+        { once: true }
+      );
+
+      audio.src = url;
+    });
   }
 
-
   /* ---------------------------------------------------------
-     12. GET SETTINGS
+     7. Load voice sample
      --------------------------------------------------------- */
 
-  function getSettings() {
+  async function load(file) {
+    clearError();
 
-    return {
+    const validation = validateFile(file);
 
-      ...state.settings
+    if (!validation.valid) {
+      setError(validation.errors.join(" "));
+      return {
+        success: false,
+        errors: validation.errors
+      };
+    }
 
+    state.loading = true;
+    state.ready = false;
+
+    emit("loading", {
+      file,
+      state: getState()
+    });
+
+    /* Remove previous preview */
+    revokePreviewUrl();
+
+    try {
+      const audioMetadata = await readAudioMetadata(file);
+
+      state.file = file;
+
+      state.previewUrl = URL.createObjectURL(file);
+
+      state.metadata = {
+        name: file.name || "voice-sample",
+        size: file.size || 0,
+        sizeLabel: formatBytes(file.size),
+        type: file.type || "audio/*",
+        extension: getExtension(file.name),
+        duration: audioMetadata.duration || 0,
+        durationLabel: formatDuration(
+          audioMetadata.duration
+        ),
+        lastModified: file.lastModified || 0
+      };
+
+      state.loadedAt = new Date().toISOString();
+      state.loading = false;
+      state.ready = true;
+      state.error = "";
+
+      emit("loaded", {
+        file,
+        metadata: { ...state.metadata },
+        state: getState()
+      });
+
+      emit("change", {
+        state: getState()
+      });
+
+      return {
+        success: true,
+        file,
+        metadata: { ...state.metadata },
+        previewUrl: state.previewUrl
+      };
+    } catch (error) {
+      state.loading = false;
+      state.ready = false;
+
+      setError(
+        error && error.message
+          ? error.message
+          : "Unable to load voice sample."
+      );
+
+      emit("change", {
+        state: getState()
+      });
+
+      return {
+        success: false,
+        errors: [state.error]
+      };
+    }
+  }
+
+  /* Friendly aliases */
+  const loadSample = load;
+  const setSample = load;
+
+  /* ---------------------------------------------------------
+     8. Preview URL management
+     --------------------------------------------------------- */
+
+  function revokePreviewUrl() {
+    if (!state.previewUrl) {
+      return;
+    }
+
+    try {
+      URL.revokeObjectURL(state.previewUrl);
+    } catch (_) {}
+
+    state.previewUrl = "";
+  }
+
+  function getPreviewUrl() {
+    return state.previewUrl;
+  }
+
+  /* ---------------------------------------------------------
+     9. Clear
+     --------------------------------------------------------- */
+
+  function clear() {
+    revokePreviewUrl();
+
+    state.ready = false;
+    state.loading = false;
+    state.file = null;
+
+    state.metadata = {
+      name: "",
+      size: 0,
+      sizeLabel: "",
+      type: "",
+      extension: "",
+      duration: 0,
+      durationLabel: "",
+      lastModified: 0
     };
 
+    state.error = "";
+    state.loadedAt = null;
+
+    emit("cleared", {
+      state: getState()
+    });
+
+    emit("change", {
+      state: getState()
+    });
   }
 
+  const reset = clear;
 
   /* ---------------------------------------------------------
-     13. LANGUAGE
+     10. Provider
      --------------------------------------------------------- */
 
-  function setLanguage(language) {
+  function setProvider(providerId) {
+    const provider = String(providerId || "")
+      .trim()
+      .toLowerCase();
 
-    const allowed = [
+    if (!supportsProvider(provider)) {
+      return false;
+    }
 
-      "auto",
+    state.provider = provider;
 
-      "bn",
+    emit("providerchange", {
+      provider,
+      providerInfo: getProvider(provider),
+      state: getState()
+    });
 
-      "en",
+    return true;
+  }
 
-      "hi",
+  function getProvider(providerId = state.provider) {
+    return (
+      SUPPORTED_PROVIDERS.find(
+        (item) => item.id === providerId
+      ) || null
+    );
+  }
 
-      "ar"
+  function getSupportedProviders() {
+    return SUPPORTED_PROVIDERS.map((provider) => ({
+      ...provider
+    }));
+  }
 
+  function supportsProvider(providerId) {
+    return SUPPORTED_PROVIDERS.some(
+      (provider) => provider.id === providerId
+    );
+  }
+
+  /* ---------------------------------------------------------
+     11. Readiness
+     --------------------------------------------------------- */
+
+  function isReady() {
+    return Boolean(
+      state.ready &&
+      state.file &&
+      state.previewUrl &&
+      state.metadata.name
+    );
+  }
+
+  function getReadiness() {
+    const checks = [
+      {
+        id: "file",
+        label: "Voice sample selected",
+        ready: Boolean(state.file)
+      },
+      {
+        id: "format",
+        label: "Supported audio format",
+        ready: Boolean(
+          state.file && isAudioFile(state.file)
+        )
+      },
+      {
+        id: "size",
+        label: "File size accepted",
+        ready: Boolean(
+          state.file &&
+          state.file.size > 0 &&
+          state.file.size <= MAX_FILE_SIZE
+        )
+      },
+      {
+        id: "metadata",
+        label: "Audio metadata readable",
+        ready: Boolean(
+          state.metadata.duration >= 0 &&
+          state.metadata.name
+        )
+      },
+      {
+        id: "preview",
+        label: "Audio preview ready",
+        ready: Boolean(state.previewUrl)
+      }
     ];
 
-
-    if (
-      !allowed.includes(language)
-    ) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "language",
-      language
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     14. VOICE STYLE
-     --------------------------------------------------------- */
-
-  function setVoiceStyle(style) {
-
-    const allowed = [
-
-      "natural",
-
-      "professional",
-
-      "friendly",
-
-      "energetic",
-
-      "calm"
-
-    ];
-
-
-    if (
-      !allowed.includes(style)
-    ) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "voiceStyle",
-      style
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     15. EMOTION
-     --------------------------------------------------------- */
-
-  function setEmotion(emotion) {
-
-    const allowed = [
-
-      "neutral",
-
-      "happy",
-
-      "serious",
-
-      "excited",
-
-      "calm"
-
-    ];
-
-
-    if (
-      !allowed.includes(emotion)
-    ) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "emotion",
-      emotion
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     16. SPEED
-     --------------------------------------------------------- */
-
-  function setSpeed(speed) {
-
-    return setSetting(
-      "speed",
-      Number(speed)
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     17. PITCH
-     --------------------------------------------------------- */
-
-  function setPitch(pitch) {
-
-    return setSetting(
-      "pitch",
-      Number(pitch)
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     18. ENABLE / DISABLE
-     --------------------------------------------------------- */
-
-  function setEnabled(enabled) {
-
-    return setSetting(
-      "enabled",
-      Boolean(enabled)
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     19. PROVIDER CHECK
-     --------------------------------------------------------- */
-
-  function checkProvider() {
-
-    const AIConfig =
-      window.SNKAI.AIConfig;
-
-
-    if (!AIConfig) {
-
-      return {
-
-        available: false,
-
-        message:
-          "AI configuration module is not loaded."
-
-      };
-
-    }
-
-
-    const provider =
-      AIConfig.getProvider();
-
-
-    if (!provider) {
-
-      return {
-
-        available: false,
-
-        message:
-          "No AI voice provider is configured."
-
-      };
-
-    }
-
-
-    const capabilities =
-      provider.capabilities || {};
-
-
-    if (!capabilities.voice) {
-
-      return {
-
-        available: false,
-
-        message:
-          "The current provider does not support AI voice generation."
-
-      };
-
-    }
-
+    const passed = checks.filter(
+      (check) => check.ready
+    ).length;
 
     return {
-
-      available: true,
-
-      provider
-
+      ready: isReady(),
+      checks,
+      passed,
+      total: checks.length,
+      percentage: Math.round(
+        (passed / checks.length) * 100
+      ),
+      error: state.error || ""
     };
-
   }
 
+  /* ---------------------------------------------------------
+     12. Getters
+     --------------------------------------------------------- */
+
+  function getFile() {
+    return state.file;
+  }
+
+  function getSample() {
+    return state.file;
+  }
+
+  function getMetadata() {
+    return {
+      ...state.metadata
+    };
+  }
+
+  function getDuration() {
+    return Number(state.metadata.duration) || 0;
+  }
+
+  function getState() {
+    return {
+      ready: state.ready,
+      loading: state.loading,
+
+      hasFile: Boolean(state.file),
+
+      metadata: {
+        ...state.metadata
+      },
+
+      previewUrl: state.previewUrl,
+
+      provider: state.provider,
+
+      error: state.error,
+
+      loadedAt: state.loadedAt
+    };
+  }
 
   /* ---------------------------------------------------------
-     20. BUILD VOICE PAYLOAD
+     13. Provider-independent payload
      --------------------------------------------------------- */
 
   function buildPayload(options = {}) {
-
-    const settings = {
-
-      ...state.settings,
-
-      ...(options.settings || {})
-
-    };
-
+    const provider =
+      options.provider ||
+      state.provider ||
+      "demo";
 
     return {
+      source: "snk-ai-mentor",
+      engine: "voice",
+      provider,
 
-      type:
-        "voice-generation",
-
-
-      source: {
-
-        name:
-          state.fileName,
-
-        mimeType:
-          state.fileType,
-
-        size:
-          state.fileSize
-
+      sample: {
+        available: Boolean(state.file),
+        name: state.metadata.name,
+        size: state.metadata.size,
+        type: state.metadata.type,
+        extension: state.metadata.extension,
+        duration: state.metadata.duration
       },
-
 
       voice: {
-
+        cloneRequested:
+          options.cloneRequested !== false,
         language:
-          settings.language,
-
-        style:
-          settings.voiceStyle,
-
-        speed:
-          settings.speed,
-
-        pitch:
-          settings.pitch,
-
-        emotion:
-          settings.emotion,
-
-        stability:
-          settings.stability,
-
-        clarity:
-          settings.clarity
-
+          options.language ||
+          "auto",
+        preserveNaturalTone:
+          options.preserveNaturalTone !== false
       },
 
-
-      text:
-        options.text ||
-        "",
-
-
-      mentor: {
-
-        name:
-          options.mentorName ||
-          "SNK AI Mentor"
-
-      },
-
-
-      output: {
-
-        format:
-          options.format ||
-          "mp3"
-
-      },
-
-
-      createdAt:
-        new Date().toISOString()
-
-    };
-
-  }
-
-
-  /* ---------------------------------------------------------
-     21. DEMO VOICE GENERATION
-     --------------------------------------------------------- */
-
-  function demoGenerate(options = {}) {
-
-    if (!state.ready) {
-
-      const message =
-        "Please upload a mentor voice sample first.";
-
-      state.error =
-        message;
-
-      emit(
-        "error",
-        {
-          message
-        }
-      );
-
-      return Promise.reject(
-        new Error(message)
-      );
-
-    }
-
-
-    if (
-      !options.text ||
-      !String(options.text).trim()
-    ) {
-
-      const message =
-        "Please provide lesson text for voice generation.";
-
-      state.error =
-        message;
-
-      emit(
-        "error",
-        {
-          message
-        }
-      );
-
-      return Promise.reject(
-        new Error(message)
-      );
-
-    }
-
-
-    state.processing = true;
-
-    state.progress = 0;
-
-    state.error = null;
-
-
-    clearGeneratedAudio();
-
-
-    emit(
-      "generationStarted",
-      getState()
-    );
-
-
-    return new Promise(resolve => {
-
-      let progress = 0;
-
-
-      const timer =
-        setInterval(
-          () => {
-
-            progress += 10;
-
-
-            state.progress =
-              Math.min(
-                progress,
-                100
-              );
-
-
-            emit(
-              "progress",
-              {
-                progress:
-                  state.progress
-              }
-            );
-
-
-            if (
-              progress >= 100
-            ) {
-
-              clearInterval(timer);
-
-
-              state.processing =
-                false;
-
-
-              state.jobId =
-                "demo-voice-" +
-                Date.now();
-
-
-              /*
-               * Demo mode does not actually clone a voice.
-               * We return the generation payload so the
-               * future provider adapter can consume it.
-               */
-
-              const payload =
-                buildPayload(
-                  options
-                );
-
-
-              emit(
-                "generationCompleted",
-                {
-
-                  jobId:
-                    state.jobId,
-
-                  payload,
-
-                  demo: true
-
-                }
-              );
-
-
-              resolve({
-
-                success: true,
-
-                demo: true,
-
-                jobId:
-                  state.jobId,
-
-                payload
-
-              });
-
-            }
-
-          },
-          120
-        );
-
-    });
-
-  }
-
-
-  /* ---------------------------------------------------------
-     22. LIVE VOICE GENERATION
-     --------------------------------------------------------- */
-
-  async function generate(options = {}) {
-
-    const AIConfig =
-      window.SNKAI.AIConfig;
-
-
-    if (!AIConfig) {
-
-      const error =
-        new Error(
-          "AI configuration is not loaded."
-        );
-
-
-      state.error =
-        error.message;
-
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-
-      throw error;
-
-    }
-
-
-    if (!state.ready) {
-
-      const error =
-        new Error(
-          "Please upload a mentor voice sample first."
-        );
-
-
-      state.error =
-        error.message;
-
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-
-      throw error;
-
-    }
-
-
-    if (
-      !options.text ||
-      !String(options.text).trim()
-    ) {
-
-      const error =
-        new Error(
-          "Lesson text is required."
-        );
-
-
-      state.error =
-        error.message;
-
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-
-      throw error;
-
-    }
-
-
-    const config =
-      AIConfig.getConfig();
-
-
-    /* -------------------------------------------------------
-       DEMO MODE
-       ------------------------------------------------------- */
-
-    if (
-      config.mode === "demo"
-    ) {
-
-      return demoGenerate(
-        options
-      );
-
-    }
-
-
-    /* -------------------------------------------------------
-       LIVE MODE
-       ------------------------------------------------------- */
-
-    const url =
-      AIConfig.getGenerateUrl();
-
-
-    if (!url) {
-
-      const error =
-        new Error(
-          "AI voice generation endpoint is not configured."
-        );
-
-
-      state.error =
-        error.message;
-
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-
-      throw error;
-
-    }
-
-
-    state.processing = true;
-
-    state.progress = 5;
-
-    state.error = null;
-
-
-    emit(
-      "generationStarted",
-      getState()
-    );
-
-
-    try {
-
-      const payload =
-        buildPayload(
-          options
-        );
-
-
-      /*
-       * Generic backend integration point.
-       *
-       * The exact provider request format will be added
-       * after the actual AI provider is selected.
-       */
-
-      const response =
-        await fetch(
-          url,
-          {
-
-            method: "POST",
-
-            headers:
-              AIConfig.buildHeaders(),
-
-            body:
-              JSON.stringify(payload)
-
-          }
-        );
-
-
-      if (!response.ok) {
-
-        throw new Error(
-          `Voice API request failed (${response.status}).`
-        );
-
+      security: {
+        rawFileIncluded: false,
+        browserOnlyMetadata: true
       }
-
-
-      const data =
-        await response.json();
-
-
-      state.progress = 100;
-
-      state.processing = false;
-
-
-      state.jobId =
-        data.jobId ||
-        data.id ||
-        null;
-
-
-      /*
-       * Some future providers may return an audio URL.
-       */
-
-      state.generatedAudioUrl =
-        data.audioUrl ||
-        data.audio_url ||
-        data.outputUrl ||
-        "";
-
-
-      emit(
-        "generationCompleted",
-        {
-
-          jobId:
-            state.jobId,
-
-          response:
-            data,
-
-          audioUrl:
-            state.generatedAudioUrl,
-
-          demo: false
-
-        }
-      );
-
-
-      return {
-
-        success: true,
-
-        demo: false,
-
-        jobId:
-          state.jobId,
-
-        audioUrl:
-          state.generatedAudioUrl,
-
-        response:
-          data
-
-      };
-
-    } catch (err) {
-
-      state.processing = false;
-
-      state.error =
-        err.message ||
-        "Voice generation failed.";
-
-
-      emit(
-        "error",
-        {
-          message:
-            state.error
-        }
-      );
-
-
-      throw err;
-
-    }
-
+    };
   }
 
-
   /* ---------------------------------------------------------
-     23. DOWNLOAD GENERATED AUDIO
+     14. FormData helper
      --------------------------------------------------------- */
 
-  function downloadGeneratedAudio(
-    fileName = "snk-ai-mentor-voice.mp3"
+  function appendToFormData(
+    formData,
+    fieldName = "voiceSample"
   ) {
-
     if (
-      !state.generatedAudioUrl
+      !formData ||
+      typeof formData.append !== "function"
     ) {
-
-      return false;
-
-    }
-
-
-    const link =
-      document.createElement(
-        "a"
+      throw new Error(
+        "A valid FormData instance is required."
       );
-
-
-    link.href =
-      state.generatedAudioUrl;
-
-
-    link.download =
-      fileName;
-
-
-    document.body.appendChild(
-      link
-    );
-
-
-    link.click();
-
-
-    link.remove();
-
-
-    return true;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     24. GET STATE
-     --------------------------------------------------------- */
-
-  function getState() {
-
-    return {
-
-      initialized:
-        state.initialized,
-
-      sourceType:
-        state.sourceType,
-
-      fileName:
-        state.fileName,
-
-      fileSize:
-        state.fileSize,
-
-      fileType:
-        state.fileType,
-
-      objectUrl:
-        state.objectUrl,
-
-      ready:
-        state.ready,
-
-      processing:
-        state.processing,
-
-      progress:
-        state.progress,
-
-      jobId:
-        state.jobId,
-
-      generatedAudioUrl:
-        state.generatedAudioUrl,
-
-      error:
-        state.error,
-
-      settings:
-        getSettings()
-
-    };
-
-  }
-
-
-  /* ---------------------------------------------------------
-     25. RESET
-     --------------------------------------------------------- */
-
-  function reset() {
-
-    clearSource();
-
-    clearGeneratedAudio();
-
-
-    state.settings = {
-
-      language: "auto",
-
-      voiceStyle: "natural",
-
-      speed: 1,
-
-      pitch: 0,
-
-      emotion: "neutral",
-
-      stability: 0.7,
-
-      clarity: 0.8,
-
-      enabled: true
-
-    };
-
-
-    state.error = null;
-
-
-    emit(
-      "reset",
-      getState()
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     26. INITIALIZE
-     --------------------------------------------------------- */
-
-  function init() {
-
-    if (
-      state.initialized
-    ) {
-
-      return getState();
-
     }
 
+    if (!state.file) {
+      throw new Error(
+        "No voice sample is loaded."
+      );
+    }
 
-    state.initialized = true;
+    formData.append(
+      fieldName,
+      state.file,
+      state.file.name || "voice-sample"
+    );
 
+    return formData;
+  }
+
+  /* ---------------------------------------------------------
+     15. Provider preparation
+     --------------------------------------------------------- */
+
+  function prepareForProvider(
+    providerId = state.provider,
+    options = {}
+  ) {
+    const provider = getProvider(providerId);
+
+    if (!provider) {
+      return {
+        success: false,
+        error: "Unsupported voice provider."
+      };
+    }
+
+    if (!isReady()) {
+      return {
+        success: false,
+        error:
+          state.error ||
+          "Voice sample is not ready."
+      };
+    }
 
     /*
-     * Read defaults from ai-config.js
-     */
+      Demo mode:
+      Return metadata only.
 
-    if (
-      window.SNKAI.AIConfig
-    ) {
+      Live providers:
+      Return provider-independent information.
+      Actual provider-specific upload/authentication
+      must be performed by a secure backend.
+    */
 
-      const config =
-        window.SNKAI.AIConfig;
+    const payload = buildPayload({
+      ...options,
+      provider: provider.id
+    });
 
+    return {
+      success: true,
 
-      const voice =
-        config.getVoiceSettings();
+      provider: provider.id,
+      providerName: provider.name,
 
+      mode: provider.live
+        ? "live"
+        : "demo",
 
-      if (voice) {
+      payload,
 
-        state.settings.language =
-          voice.language ||
-          state.settings.language;
+      file: state.file,
 
-      }
+      previewUrl: state.previewUrl,
 
-    }
+      requiresBackend: Boolean(provider.live),
 
-
-    normalizeSettings();
-
-
-    emit(
-      "initialized",
-      getState()
-    );
-
-
-    return getState();
-
+      message: provider.live
+        ? "Voice sample is prepared. A secure backend/provider integration is required for actual voice processing."
+        : "Demo voice sample is ready."
+    };
   }
 
+  /* ---------------------------------------------------------
+     16. File input helper
+     --------------------------------------------------------- */
+
+  async function handleInput(input) {
+    if (!input || !input.files) {
+      return {
+        success: false,
+        errors: ["Invalid file input."]
+      };
+    }
+
+    const file = input.files[0];
+
+    if (!file) {
+      return {
+        success: false,
+        errors: ["No voice sample selected."]
+      };
+    }
+
+    return load(file);
+  }
 
   /* ---------------------------------------------------------
-     27. PUBLIC API
+     17. Destroy
+     --------------------------------------------------------- */
+
+  function destroy() {
+    clear();
+
+    Object.keys(EVENTS).forEach(
+      (eventName) => {
+        EVENTS[eventName] = [];
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     18. Public API
      --------------------------------------------------------- */
 
   const Voice = {
+    /* lifecycle */
+    load,
+    loadSample,
+    setSample,
+    clear,
+    reset,
+    destroy,
 
-    init,
+    /* input */
+    handleInput,
+    validateFile,
 
-    on,
+    /* file */
+    getFile,
+    getSample,
+    getPreviewUrl,
+    getMetadata,
+    getDuration,
 
-    off,
+    /* readiness */
+    isReady,
+    getReadiness,
 
-    emit,
+    /* provider */
+    setProvider,
+    getProvider,
+    getSupportedProviders,
+    supportsProvider,
+    prepareForProvider,
 
+    /* payload */
+    buildPayload,
+    appendToFormData,
+
+    /* state */
     getState,
 
-    getSettings,
+    /* events */
+    on,
 
-    setSettings,
-
-    setSetting,
-
-    setSource,
-
-    clearSource,
-
-    validateAudioFile,
-
-    setLanguage,
-
-    setVoiceStyle,
-
-    setEmotion,
-
-    setSpeed,
-
-    setPitch,
-
-    setEnabled,
-
-    checkProvider,
-
-    buildPayload,
-
-    generate,
-
-    cancel: () => {
-
-      if (!state.processing) {
-        return false;
-      }
-
-
-      state.processing = false;
-
-      state.error =
-        "Voice generation cancelled.";
-
-
-      emit(
-        "cancelled",
-        getState()
-      );
-
-
-      return true;
-
-    },
-
-    downloadGeneratedAudio,
-
-    reset
-
+    /* constants */
+    MAX_FILE_SIZE,
+    MAX_FILE_SIZE_LABEL: formatBytes(
+      MAX_FILE_SIZE
+    ),
+    SUPPORTED_EXTENSIONS:
+      SUPPORTED_EXTENSIONS.slice(),
+    SUPPORTED_MIME_TYPES:
+      SUPPORTED_MIME_TYPES.slice()
   };
 
-
   /* ---------------------------------------------------------
-     28. EXPORT
+     19. Expose
      --------------------------------------------------------- */
 
-  window.SNKAI.Voice =
-    Voice;
-
+  window.SNKAI.Voice = Voice;
 
   /* ---------------------------------------------------------
-     29. AUTO INITIALIZE
+     20. Initial event
      --------------------------------------------------------- */
 
-  if (
-    document.readyState ===
-    "loading"
-  ) {
+  emit("ready", {
+    engine: "voice",
+    version: "1.0.0"
+  });
 
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => Voice.init(),
-      {
-        once: true
-      }
-    );
-
-  } else {
-
-    Voice.init();
-
-  }
-
-
+  console.log(
+    "%cSNK AI Mentor%c Voice Engine loaded.",
+    "font-weight:700;color:#7dd3fc;",
+    "font-weight:400;color:inherit;"
+  );
 })();
