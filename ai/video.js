@@ -1,1814 +1,941 @@
 /* =========================================================
-   SNK AI MENTOR
-   ai/video.js
-   Step 17 — AI Mentor Video Generation Engine
+   SNK AI Mentor
+   ai/voice.js
+
+   STEP 27 — Voice Sample Engine
+
+   Responsibilities:
+   - Voice sample upload
+   - Audio validation
+   - File size validation
+   - Audio metadata detection
+   - Preview URL creation
+   - Readiness state
+   - Provider-independent payload
+   - FormData helper
+   - Provider preparation
+   - Events
+   - Safe reset / clear
+
+   IMPORTANT:
+   This browser-side engine does NOT clone a voice.
+   Actual voice cloning / voice synthesis must happen through
+   an authorized external AI provider or your secure backend.
+
+   Supported provider labels:
+   - demo
+   - custom
+   - heygen
+   - synthesia
+   - d-id
+
+   No API key or raw audio file is stored in localStorage.
    ========================================================= */
 
 (() => {
   "use strict";
 
-  window.SNKAI = window.SNKAI || {};
+  /* ---------------------------------------------------------
+     1. Namespace
+     --------------------------------------------------------- */
 
-  const NS = window.SNKAI;
+  window.SNKAI = window.SNKAI || {};
 
   const EVENTS = {};
 
+  /* ---------------------------------------------------------
+     2. Constants
+     --------------------------------------------------------- */
+
+  const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
+
+  const SUPPORTED_EXTENSIONS = [
+    "mp3",
+    "wav",
+    "m4a",
+    "aac",
+    "ogg",
+    "oga",
+    "webm",
+    "flac"
+  ];
+
+  const SUPPORTED_MIME_TYPES = [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
+    "audio/x-pn-wav",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/aac",
+    "audio/ogg",
+    "audio/oga",
+    "audio/webm",
+    "audio/flac",
+    "audio/x-flac"
+  ];
+
+  const SUPPORTED_PROVIDERS = [
+    {
+      id: "demo",
+      name: "Demo Engine",
+      live: false,
+      description: "Local browser demo mode."
+    },
+    {
+      id: "custom",
+      name: "Custom API",
+      live: true,
+      description: "Connect your own secure backend."
+    },
+    {
+      id: "heygen",
+      name: "HeyGen",
+      live: true,
+      description: "External avatar and voice platform."
+    },
+    {
+      id: "synthesia",
+      name: "Synthesia",
+      live: true,
+      description: "External AI video platform."
+    },
+    {
+      id: "d-id",
+      name: "D-ID",
+      live: true,
+      description: "External talking-avatar platform."
+    }
+  ];
+
+  /* ---------------------------------------------------------
+     3. Internal state
+     --------------------------------------------------------- */
+
   const state = {
-    processing: false,
-    progress: 0,
-    status: "idle",
-    message: "",
+    ready: false,
+    loading: false,
+
+    file: null,
+    previewUrl: "",
+
+    metadata: {
+      name: "",
+      size: 0,
+      sizeLabel: "",
+      type: "",
+      extension: "",
+      duration: 0,
+      durationLabel: "",
+      lastModified: 0
+    },
+
     error: "",
+    provider: "demo",
 
-    jobId: "",
-    videoUrl: "",
-    downloadUrl: "",
-    thumbnailUrl: "",
-
-    startedAt: null,
-    completedAt: null,
-
-    lastPayload: null,
-    result: null
+    loadedAt: null
   };
 
-  /* =========================================================
-     EVENT SYSTEM
-  ========================================================= */
+  /* ---------------------------------------------------------
+     4. Utility
+     --------------------------------------------------------- */
 
   function emit(eventName, detail = {}) {
-    const handlers = EVENTS[eventName] || [];
+    const listeners = EVENTS[eventName];
 
-    handlers.forEach((handler) => {
+    if (!listeners || !listeners.length) {
+      return;
+    }
+
+    listeners.slice().forEach((listener) => {
       try {
-        handler(detail);
+        listener(detail);
       } catch (error) {
         console.error(
-          "[SNK Video] Event handler error:",
+          "[SNK AI Voice] Event listener error:",
           error
         );
       }
     });
-
-    try {
-      window.dispatchEvent(
-        new CustomEvent(
-          `snk-video:${eventName}`,
-          { detail }
-        )
-      );
-    } catch (_) {}
   }
 
-  function on(eventName, handler) {
-    if (typeof handler !== "function") {
+  function on(eventName, callback) {
+    if (typeof callback !== "function") {
       return () => {};
     }
 
-    if (!EVENTS[eventName]) {
-      EVENTS[eventName] = [];
-    }
-
-    EVENTS[eventName].push(handler);
+    EVENTS[eventName] = EVENTS[eventName] || [];
+    EVENTS[eventName].push(callback);
 
     return () => {
       EVENTS[eventName] =
-        EVENTS[eventName].filter(
-          (item) => item !== handler
+        (EVENTS[eventName] || []).filter(
+          (listener) => listener !== callback
         );
     };
   }
 
-  /* =========================================================
-     HELPERS
-  ========================================================= */
+  function setError(message) {
+    state.error = String(message || "");
+    state.ready = false;
 
-  function sleep(ms) {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
+    emit("error", {
+      message: state.error,
+      state: getState()
     });
   }
 
-  function clamp(value, min, max) {
-    return Math.min(
-      max,
-      Math.max(min, value)
-    );
+  function clearError() {
+    state.error = "";
   }
 
-  function updateProgress(
-    progress,
-    status,
-    message
-  ) {
-    state.progress = clamp(
-      Number(progress) || 0,
+  function getExtension(fileName = "") {
+    const parts = String(fileName).toLowerCase().split(".");
+
+    if (parts.length < 2) {
+      return "";
+    }
+
+    return parts.pop();
+  }
+
+  function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+
+    if (value <= 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB"];
+
+    const index = Math.min(
+      Math.floor(Math.log(value) / Math.log(1024)),
+      units.length - 1
+    );
+
+    const size = value / Math.pow(1024, index);
+
+    return `${size.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
+  }
+
+  function formatDuration(seconds) {
+    const total = Math.max(
       0,
-      100
+      Math.round(Number(seconds) || 0)
     );
 
-    state.status =
-      status || state.status;
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
 
-    state.message =
-      message || state.message;
-
-    emit("progress", {
-      progress:
-        state.progress,
-
-      status:
-        state.status,
-
-      message:
-        state.message
-    });
-  }
-
-  function getConfig() {
-    return NS.AIConfig || null;
-  }
-
-  function getAvatar() {
-    return NS.Avatar || null;
-  }
-
-  function getVoice() {
-    return NS.Voice || null;
-  }
-
-  /* =========================================================
-     CONFIG HELPERS
-  ========================================================= */
-
-  function getMode() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getMode === "function"
-    ) {
-      return config.getMode();
+    if (hours > 0) {
+      return [
+        String(hours).padStart(2, "0"),
+        String(minutes).padStart(2, "0"),
+        String(secs).padStart(2, "0")
+      ].join(":");
     }
 
-    return "demo";
+    return [
+      String(minutes).padStart(2, "0"),
+      String(secs).padStart(2, "0")
+    ].join(":");
   }
 
-  function isDemoMode() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.isDemoMode === "function"
-    ) {
-      return config.isDemoMode();
+  function isAudioFile(file) {
+    if (!file) {
+      return false;
     }
 
-    return getMode() === "demo";
+    const mime = String(file.type || "").toLowerCase();
+    const extension = getExtension(file.name);
+
+    const mimeAccepted =
+      mime.startsWith("audio/") ||
+      SUPPORTED_MIME_TYPES.includes(mime);
+
+    const extensionAccepted =
+      SUPPORTED_EXTENSIONS.includes(extension);
+
+    return mimeAccepted || extensionAccepted;
   }
 
-  function getProvider() {
-    const config =
-      getConfig();
+  /* ---------------------------------------------------------
+     5. File validation
+     --------------------------------------------------------- */
 
-    if (
-      config &&
-      typeof config.getProvider === "function"
-    ) {
-      return config.getProvider();
-    }
-
-    return "demo";
-  }
-
-  function getGenerateUrl() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getGenerateUrl === "function"
-    ) {
-      return config.getGenerateUrl();
-    }
-
-    return "";
-  }
-
-  function getStatusUrl(jobId) {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getStatusUrl === "function"
-    ) {
-      return config.getStatusUrl(
-        jobId
-      );
-    }
-
-    return "";
-  }
-
-  function buildHeaders() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.buildHeaders === "function"
-    ) {
-      return config.buildHeaders();
-    }
-
-    return {
-      "Content-Type":
-        "application/json"
-    };
-  }
-
-  function getTimeout() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getRequestTimeout ===
-        "function"
-    ) {
-      return config.getRequestTimeout();
-    }
-
-    return 120000;
-  }
-
-  function getPollingInterval() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getPollingInterval ===
-        "function"
-    ) {
-      return config.getPollingInterval();
-    }
-
-    return 4000;
-  }
-
-  function getMaxPollingAttempts() {
-    const config =
-      getConfig();
-
-    if (
-      config &&
-      typeof config.getMaxPollingAttempts ===
-        "function"
-    ) {
-      return config.getMaxPollingAttempts();
-    }
-
-    return 90;
-  }
-
-  /* =========================================================
-     INPUT NORMALIZATION
-  ========================================================= */
-
-  function getValue(elementId) {
-    const element =
-      document.getElementById(
-        elementId
-      );
-
-    return element
-      ? String(element.value || "")
-      : "";
-  }
-
-  function collectSettings() {
-    return {
-      format:
-        getValue("videoFormat") ||
-        "mp4",
-
-      resolution:
-        getValue("videoResolution") ||
-        "1080p",
-
-      mentorPosition:
-        getValue("mentorPosition") ||
-        "right",
-
-      background:
-        getValue("videoBackground") ||
-        "studio",
-
-      aspectRatio:
-        "16:9",
-
-      fps: 30,
-
-      subtitles: false,
-
-      audio: true
-    };
-  }
-
-  function getLessonScript() {
-    return getValue(
-      "lessonScript"
-    ).trim();
-  }
-
-  /* =========================================================
-     VALIDATION
-  ========================================================= */
-
-  function validate() {
-    const avatar =
-      getAvatar();
-
-    const voice =
-      getVoice();
-
-    const script =
-      getLessonScript();
-
-    const settings =
-      collectSettings();
-
+  function validateFile(file) {
     const errors = [];
 
-    if (!avatar) {
+    if (!file) {
+      errors.push("Please select a voice sample.");
+      return {
+        valid: false,
+        errors
+      };
+    }
+
+    if (!isAudioFile(file)) {
       errors.push(
-        "Avatar engine is not loaded."
-      );
-    } else if (
-      typeof avatar.isReady ===
-        "function" &&
-      !avatar.isReady()
-    ) {
-      errors.push(
-        "Please upload a face video."
+        "Unsupported audio format. Use MP3, WAV, M4A, AAC, OGG, WEBM or FLAC."
       );
     }
 
-    if (!voice) {
+    if (file.size > MAX_FILE_SIZE) {
       errors.push(
-        "Voice engine is not loaded."
-      );
-    } else if (
-      typeof voice.isReady ===
-        "function" &&
-      !voice.isReady()
-    ) {
-      errors.push(
-        "Please upload a voice sample."
+        `Voice sample is too large. Maximum size is ${formatBytes(
+          MAX_FILE_SIZE
+        )}.`
       );
     }
 
-    if (!script) {
-      errors.push(
-        "Please write the lesson script."
-      );
-    }
-
-    if (
-      script.length < 3
-    ) {
-      errors.push(
-        "Lesson script is too short."
-      );
-    }
-
-    if (
-      !settings.format
-    ) {
-      errors.push(
-        "Video format is missing."
-      );
-    }
-
-    if (
-      !settings.resolution
-    ) {
-      errors.push(
-        "Video resolution is missing."
-      );
+    if (file.size <= 0) {
+      errors.push("The selected audio file is empty.");
     }
 
     return {
-      valid:
-        errors.length === 0,
-
+      valid: errors.length === 0,
       errors,
-
-      script,
-
-      settings
+      maxSize: MAX_FILE_SIZE,
+      maxSizeLabel: formatBytes(MAX_FILE_SIZE)
     };
   }
 
-  /* =========================================================
-     ENGINE READINESS
-  ========================================================= */
+  /* ---------------------------------------------------------
+     6. Audio metadata
+     --------------------------------------------------------- */
 
-  function checkEngineReadiness() {
-    const avatar =
-      getAvatar();
-
-    const voice =
-      getVoice();
-
-    const result = {
-      avatar: {
-        available:
-          Boolean(avatar),
-
-        ready:
-          Boolean(
-            avatar &&
-            typeof avatar.isReady ===
-              "function" &&
-            avatar.isReady()
-          )
-      },
-
-      voice: {
-        available:
-          Boolean(voice),
-
-        ready:
-          Boolean(
-            voice &&
-            typeof voice.isReady ===
-              "function" &&
-            voice.isReady()
-          )
-      },
-
-      script: {
-        ready:
-          getLessonScript().length > 2
-      },
-
-      settings: {
-        ready:
-          Boolean(
-            getValue(
-              "videoFormat"
-            ) &&
-            getValue(
-              "videoResolution"
-            )
-          )
+  function readAudioMetadata(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error("No audio file supplied."));
+        return;
       }
-    };
 
-    result.ready =
-      result.avatar.ready &&
-      result.voice.ready &&
-      result.script.ready &&
-      result.settings.ready;
+      const url = URL.createObjectURL(file);
+      const audio = document.createElement("audio");
 
-    return result;
+      let finished = false;
+
+      const cleanup = () => {
+        audio.removeAttribute("src");
+
+        try {
+          audio.load();
+        } catch (_) {}
+
+        URL.revokeObjectURL(url);
+      };
+
+      const success = () => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        const duration = Number(audio.duration);
+
+        cleanup();
+
+        resolve({
+          duration:
+            Number.isFinite(duration) && duration > 0
+              ? duration
+              : 0
+        });
+      };
+
+      const failure = () => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        cleanup();
+
+        reject(
+          new Error(
+            "Could not read audio metadata from this file."
+          )
+        );
+      };
+
+      audio.preload = "metadata";
+
+      audio.addEventListener(
+        "loadedmetadata",
+        success,
+        { once: true }
+      );
+
+      audio.addEventListener(
+        "error",
+        failure,
+        { once: true }
+      );
+
+      audio.src = url;
+    });
   }
 
-  /* =========================================================
-     BUILD GENERATION PAYLOAD
-  ========================================================= */
+  /* ---------------------------------------------------------
+     7. Load voice sample
+     --------------------------------------------------------- */
 
-  function buildPayload(extra = {}) {
-    const validation =
-      validate();
+  async function load(file) {
+    clearError();
+
+    const validation = validateFile(file);
 
     if (!validation.valid) {
-      throw new Error(
-        validation.errors.join(" ")
-      );
-    }
-
-    const avatar =
-      getAvatar();
-
-    const voice =
-      getVoice();
-
-    const avatarData =
-      avatar &&
-      typeof avatar.buildPayload ===
-        "function"
-        ? avatar.buildPayload(
-            validation.settings
-          )
-        : {};
-
-    const voiceData =
-      voice &&
-      typeof voice.buildPayload ===
-        "function"
-        ? voice.buildPayload(
-            validation.settings
-          )
-        : {};
-
-    const payload = {
-      project: {
-        name:
-          getValue(
-            "projectName"
-          ) ||
-          "SNK AI Mentor Project"
-      },
-
-      provider: {
-        name:
-          getProvider(),
-
-        mode:
-          getMode()
-      },
-
-      avatar:
-        avatarData,
-
-      voice:
-        voiceData,
-
-      script: {
-        text:
-          validation.script,
-
-        language:
-          getValue(
-            "scriptLanguage"
-          ) ||
-          "bn",
-
-        style:
-          getValue(
-            "scriptStyle"
-          ) ||
-          "teaching"
-      },
-
-      settings:
-        validation.settings,
-
-      client: {
-        application:
-          "SNK AI Mentor",
-
-        engine:
-          "video",
-
-        version:
-          "2.0.0"
-      },
-
-      ...extra
-    };
-
-    state.lastPayload =
-      payload;
-
-    return payload;
-  }
-
-  /* =========================================================
-     DEMO GENERATOR
-  ========================================================= */
-
-  async function runDemo(payload) {
-    updateProgress(
-      5,
-      "preparing",
-      "Preparing AI mentor project..."
-    );
-
-    await sleep(500);
-
-    updateProgress(
-      18,
-      "avatar",
-      "Preparing mentor avatar..."
-    );
-
-    await sleep(700);
-
-    updateProgress(
-      34,
-      "voice",
-      "Preparing voice sample..."
-    );
-
-    await sleep(700);
-
-    updateProgress(
-      50,
-      "script",
-      "Processing lesson script..."
-    );
-
-    await sleep(700);
-
-    updateProgress(
-      68,
-      "rendering",
-      "Rendering demo mentor video..."
-    );
-
-    await sleep(900);
-
-    updateProgress(
-      82,
-      "audio",
-      "Preparing synchronized narration..."
-    );
-
-    await sleep(600);
-
-    updateProgress(
-      94,
-      "finalizing",
-      "Finalizing video..."
-    );
-
-    await sleep(700);
-
-    /*
-      Demo mode does not create a real AI-cloned MP4.
-      We create a browser-generated placeholder video
-      so the Studio pipeline can be tested.
-    */
-
-    const demoVideo =
-      createDemoVideo();
-
-    state.videoUrl =
-      demoVideo.url;
-
-    state.downloadUrl =
-      demoVideo.url;
-
-    state.thumbnailUrl =
-      "";
-
-    state.jobId =
-      `demo-${Date.now()}`;
-
-    state.result = {
-      success: true,
-      mode: "demo",
-      provider:
-        payload.provider.name,
-
-      jobId:
-        state.jobId,
-
-      videoUrl:
-        state.videoUrl,
-
-      downloadUrl:
-        state.downloadUrl,
-
-      message:
-        "Demo video created. Live AI provider integration is still required for real avatar/voice generation."
-    };
-
-    updateProgress(
-      100,
-      "completed",
-      "Demo video is ready."
-    );
-
-    return state.result;
-  }
-
-  /* =========================================================
-     CREATE DEMO VIDEO
-  ========================================================= */
-
-  function createDemoVideo() {
-    /*
-      Browser MediaRecorder is used only to create
-      a simple local test video.
-
-      It does NOT perform face cloning or voice cloning.
-    */
-
-    if (
-      typeof MediaRecorder ===
-      "undefined"
-    ) {
-      return {
-        url: createDemoHtmlVideo(),
-        type: "html"
-      };
-    }
-
-    try {
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      canvas.width = 1280;
-      canvas.height = 720;
-
-      const ctx =
-        canvas.getContext(
-          "2d"
-        );
-
-      if (!ctx) {
-        return {
-          url:
-            createDemoHtmlVideo(),
-          type: "html"
-        };
-      }
-
-      let frame = 0;
-
-      const draw = () => {
-        frame++;
-
-        ctx.clearRect(
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        ctx.fillStyle =
-          "#07111f";
-
-        ctx.fillRect(
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        const gradient =
-          ctx.createLinearGradient(
-            0,
-            0,
-            canvas.width,
-            canvas.height
-          );
-
-        gradient.addColorStop(
-          0,
-          "#0d2440"
-        );
-
-        gradient.addColorStop(
-          1,
-          "#111827"
-        );
-
-        ctx.fillStyle =
-          gradient;
-
-        ctx.fillRect(
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        ctx.fillStyle =
-          "rgba(80,160,255,.14)";
-
-        ctx.beginPath();
-
-        ctx.arc(
-          980 +
-            Math.sin(
-              frame / 20
-            ) *
-              35,
-          180,
-          150,
-          0,
-          Math.PI * 2
-        );
-
-        ctx.fill();
-
-        ctx.fillStyle =
-          "#ffffff";
-
-        ctx.font =
-          "700 58px Arial";
-
-        ctx.fillText(
-          "SNK AI Mentor",
-          80,
-          180
-        );
-
-        ctx.font =
-          "400 30px Arial";
-
-        ctx.fillStyle =
-          "#b9c7d8";
-
-        ctx.fillText(
-          "Demo AI Teaching Video",
-          84,
-          235
-        );
-
-        ctx.font =
-          "400 22px Arial";
-
-        ctx.fillStyle =
-          "#8ea1b8";
-
-        ctx.fillText(
-          "Avatar + Voice + Script pipeline ready",
-          84,
-          285
-        );
-
-        ctx.fillStyle =
-          "rgba(255,255,255,.08)";
-
-        ctx.fillRect(
-          84,
-          350,
-          1110,
-          2
-        );
-
-        ctx.fillStyle =
-          "#dce8f5";
-
-        ctx.font =
-          "500 24px Arial";
-
-        ctx.fillText(
-          "This is a browser demo placeholder.",
-          84,
-          415
-        );
-
-        ctx.fillStyle =
-          "#91a4ba";
-
-        ctx.font =
-          "400 19px Arial";
-
-        ctx.fillText(
-          "Connect a secure AI provider to generate the real mentor video.",
-          84,
-          455
-        );
-
-        ctx.fillStyle =
-          "#70839b";
-
-        ctx.font =
-          "400 17px Arial";
-
-        ctx.fillText(
-          new Date().toLocaleString(),
-          84,
-          620
-        );
-      };
-
-      draw();
-
-      const stream =
-        canvas.captureStream(
-          25
-        );
-
-      const mimeTypes = [
-        "video/webm;codecs=vp9",
-        "video/webm;codecs=vp8",
-        "video/webm"
-      ];
-
-      const supported =
-        mimeTypes.find(
-          (type) =>
-            MediaRecorder.isTypeSupported(
-              type
-            )
-        );
-
-      if (!supported) {
-        return {
-          url:
-            createDemoHtmlVideo(),
-          type: "html"
-        };
-      }
-
-      const recorder =
-        new MediaRecorder(
-          stream,
-          {
-            mimeType:
-              supported
-          }
-        );
-
-      const chunks = [];
-
-      recorder.ondataavailable =
-        (event) => {
-          if (
-            event.data &&
-            event.data.size
-          ) {
-            chunks.push(
-              event.data
-            );
-          }
-        };
-
-      return new Promise(
-        (resolve) => {
-          recorder.onstop =
-            () => {
-              const blob =
-                new Blob(
-                  chunks,
-                  {
-                    type:
-                      supported
-                  }
-                );
-
-              resolve({
-                url:
-                  URL.createObjectURL(
-                    blob
-                  ),
-
-                type:
-                  supported
-              });
-            };
-
-          recorder.start();
-
-          setTimeout(
-            () => {
-              try {
-                recorder.stop();
-              } catch (_) {
-                resolve({
-                  url:
-                    createDemoHtmlVideo(),
-                  type: "html"
-                });
-              }
-            },
-            3000
-          );
-        }
-      );
-    } catch (error) {
-      console.warn(
-        "[SNK Video] Demo MediaRecorder failed:",
-        error
-      );
-
-      return {
-        url:
-          createDemoHtmlVideo(),
-
-        type:
-          "html"
-      };
-    }
-  }
-
-  function createDemoHtmlVideo() {
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>SNK AI Mentor Demo</title>
-<style>
-html,body{
-  margin:0;
-  width:100%;
-  height:100%;
-  background:#07111f;
-  color:#fff;
-  font-family:Arial,sans-serif;
-}
-body{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-main{
-  text-align:center;
-  padding:40px;
-}
-h1{
-  font-size:48px;
-  margin:0 0 18px;
-}
-p{
-  color:#a9b8ca;
-  font-size:20px;
-}
-</style>
-</head>
-<body>
-<main>
-<h1>SNK AI Mentor</h1>
-<p>Demo AI Mentor Video</p>
-<p>Connect a live provider for real avatar + voice generation.</p>
-</main>
-</body>
-</html>
-`;
-
-    const blob =
-      new Blob(
-        [html],
-        {
-          type:
-            "text/html"
-        }
-      );
-
-    return URL.createObjectURL(
-      blob
-    );
-  }
-
-  /* =========================================================
-     LIVE API REQUEST
-  ========================================================= */
-
-  async function requestLiveGeneration(
-    payload
-  ) {
-    const endpoint =
-      getGenerateUrl();
-
-    if (!endpoint) {
-      throw new Error(
-        "Live generation endpoint is not configured."
-      );
-    }
-
-    const controller =
-      new AbortController();
-
-    const timeout =
-      setTimeout(
-        () => {
-          controller.abort();
-        },
-        getTimeout()
-      );
-
-    try {
-      const response =
-        await fetch(
-          endpoint,
-          {
-            method:
-              "POST",
-
-            headers:
-              buildHeaders(),
-
-            body:
-              JSON.stringify(
-                payload
-              ),
-
-            signal:
-              controller.signal
-          }
-        );
-
-      let data = null;
-
-      try {
-        data =
-          await response.json();
-      } catch (_) {
-        data = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-          data?.error ||
-          `Generation request failed (${response.status}).`
-        );
-      }
-
-      return (
-        data || {}
-      );
-    } catch (error) {
-      if (
-        error?.name ===
-        "AbortError"
-      ) {
-        throw new Error(
-          "Generation request timed out."
-        );
-      }
-
-      throw error;
-    } finally {
-      clearTimeout(
-        timeout
-      );
-    }
-  }
-
-  /* =========================================================
-     EXTRACT JOB INFORMATION
-  ========================================================= */
-
-  function extractJobData(data) {
-    return {
-      jobId:
-        data?.jobId ||
-        data?.id ||
-        data?.data?.jobId ||
-        data?.data?.id ||
-        "",
-
-      status:
-        data?.status ||
-        data?.data?.status ||
-        "processing",
-
-      progress:
-        Number(
-          data?.progress ??
-          data?.data?.progress ??
-          0
-        ),
-
-      videoUrl:
-        data?.videoUrl ||
-        data?.video_url ||
-        data?.data?.videoUrl ||
-        data?.data?.video_url ||
-        "",
-
-      downloadUrl:
-        data?.downloadUrl ||
-        data?.download_url ||
-        data?.data?.downloadUrl ||
-        data?.data?.download_url ||
-        "",
-
-      thumbnailUrl:
-        data?.thumbnailUrl ||
-        data?.thumbnail_url ||
-        data?.data?.thumbnailUrl ||
-        data?.data?.thumbnail_url ||
-        "",
-
-      message:
-        data?.message ||
-        data?.data?.message ||
-        ""
-    };
-  }
-
-  /* =========================================================
-     POLL LIVE JOB
-  ========================================================= */
-
-  async function pollJob(
-    jobId,
-    initialData = {}
-  ) {
-    const endpoint =
-      getStatusUrl(
-        jobId
-      );
-
-    if (!endpoint) {
-      throw new Error(
-        "Live status endpoint is not configured."
-      );
-    }
-
-    let last =
-      extractJobData(
-        initialData
-      );
-
-    const maxAttempts =
-      getMaxPollingAttempts();
-
-    const interval =
-      getPollingInterval();
-
-    for (
-      let attempt = 0;
-      attempt < maxAttempts;
-      attempt++
-    ) {
-      if (
-        state.status ===
-        "cancelled"
-      ) {
-        throw new Error(
-          "Video generation was cancelled."
-        );
-      }
-
-      if (
-        attempt > 0
-      ) {
-        await sleep(
-          interval
-        );
-      }
-
-      const response =
-        await fetch(
-          endpoint,
-          {
-            method:
-              "GET",
-
-            headers:
-              buildHeaders()
-          }
-        );
-
-      let data = {};
-
-      try {
-        data =
-          await response.json();
-      } catch (_) {}
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-          data?.error ||
-          `Status request failed (${response.status}).`
-        );
-      }
-
-      last =
-        extractJobData(
-          data
-        );
-
-      const calculatedProgress =
-        last.progress ||
-        Math.min(
-          95,
-          10 +
-            Math.round(
-              (attempt /
-                Math.max(
-                  1,
-                  maxAttempts
-                )) *
-                85
-            )
-        );
-
-      updateProgress(
-        calculatedProgress,
-        last.status ||
-          "processing",
-        last.message ||
-          "AI mentor video is being generated..."
-      );
-
-      const normalizedStatus =
-        String(
-          last.status ||
-            ""
-        ).toLowerCase();
-
-      if (
-        normalizedStatus ===
-          "completed" ||
-        normalizedStatus ===
-          "complete" ||
-        normalizedStatus ===
-          "success" ||
-        Boolean(
-          last.videoUrl
-        )
-      ) {
-        state.videoUrl =
-          last.videoUrl;
-
-        state.downloadUrl =
-          last.downloadUrl ||
-          last.videoUrl;
-
-        state.thumbnailUrl =
-          last.thumbnailUrl ||
-          "";
-
-        return last;
-      }
-
-      if (
-        normalizedStatus ===
-          "failed" ||
-        normalizedStatus ===
-          "error" ||
-        normalizedStatus ===
-          "cancelled"
-      ) {
-        throw new Error(
-          last.message ||
-          "AI video generation failed."
-        );
-      }
-    }
-
-    throw new Error(
-      "Video generation polling timed out."
-    );
-  }
-
-  /* =========================================================
-     START GENERATION
-  ========================================================= */
-
-  async function generate(
-    extraPayload = {}
-  ) {
-    if (
-      state.processing
-    ) {
+      setError(validation.errors.join(" "));
       return {
         success: false,
-        error:
-          "Video generation is already running."
+        errors: validation.errors
       };
     }
 
-    const validation =
-      validate();
+    state.loading = true;
+    state.ready = false;
 
-    if (!validation.valid) {
-      const error =
-        validation.errors.join(
-          " "
-        );
-
-      state.error =
-        error;
-
-      emit("error", {
-        message:
-          error
-      });
-
-      return {
-        success: false,
-        error
-      };
-    }
-
-    const payload =
-      buildPayload(
-        extraPayload
-      );
-
-    state.processing = true;
-    state.progress = 0;
-    state.status =
-      "starting";
-    state.message =
-      "Starting AI mentor video generation...";
-    state.error = "";
-
-    state.jobId = "";
-    state.videoUrl = "";
-    state.downloadUrl = "";
-    state.thumbnailUrl = "";
-    state.result = null;
-
-    state.startedAt =
-      new Date().toISOString();
-
-    emit("started", {
-      payload
+    emit("loading", {
+      file,
+      state: getState()
     });
 
+    /* Remove previous preview */
+    revokePreviewUrl();
+
     try {
-      let result;
+      const audioMetadata = await readAudioMetadata(file);
 
-      if (
-        isDemoMode()
-      ) {
-        result =
-          await runDemo(
-            payload
-          );
-      } else {
-        updateProgress(
-          8,
-          "uploading",
-          "Sending generation request..."
-        );
+      state.file = file;
 
-        const response =
-          await requestLiveGeneration(
-            payload
-          );
+      state.previewUrl = URL.createObjectURL(file);
 
-        const job =
-          extractJobData(
-            response
-          );
+      state.metadata = {
+        name: file.name || "voice-sample",
+        size: file.size || 0,
+        sizeLabel: formatBytes(file.size),
+        type: file.type || "audio/*",
+        extension: getExtension(file.name),
+        duration: audioMetadata.duration || 0,
+        durationLabel: formatDuration(
+          audioMetadata.duration
+        ),
+        lastModified: file.lastModified || 0
+      };
 
-        state.jobId =
-          job.jobId;
+      state.loadedAt = new Date().toISOString();
+      state.loading = false;
+      state.ready = true;
+      state.error = "";
 
-        if (
-          job.videoUrl
-        ) {
-          state.videoUrl =
-            job.videoUrl;
-
-          state.downloadUrl =
-            job.downloadUrl ||
-            job.videoUrl;
-
-          state.thumbnailUrl =
-            job.thumbnailUrl ||
-            "";
-
-          updateProgress(
-            100,
-            "completed",
-            "AI mentor video is ready."
-          );
-
-          result =
-            job;
-        } else if (
-          state.jobId
-        ) {
-          result =
-            await pollJob(
-              state.jobId,
-              response
-            );
-        } else {
-          throw new Error(
-            "Provider response did not contain a video URL or job ID."
-          );
-        }
-
-        state.result = {
-          success: true,
-
-          mode:
-            "live",
-
-          provider:
-            getProvider(),
-
-          jobId:
-            state.jobId,
-
-          videoUrl:
-            state.videoUrl,
-
-          downloadUrl:
-            state.downloadUrl,
-
-          thumbnailUrl:
-            state.thumbnailUrl,
-
-          providerResult:
-            result
-        };
-      }
-
-      state.completedAt =
-        new Date().toISOString();
-
-      state.processing = false;
-
-      emit("completed", {
-        result:
-          state.result
+      emit("loaded", {
+        file,
+        metadata: { ...state.metadata },
+        state: getState()
       });
 
-      return (
-        state.result || {
-          success: true
-        }
+      emit("change", {
+        state: getState()
+      });
+
+      return {
+        success: true,
+        file,
+        metadata: { ...state.metadata },
+        previewUrl: state.previewUrl
+      };
+    } catch (error) {
+      state.loading = false;
+      state.ready = false;
+
+      setError(
+        error && error.message
+          ? error.message
+          : "Unable to load voice sample."
       );
 
-    } catch (error) {
-      state.processing = false;
-
-      state.status =
-        "failed";
-
-      state.error =
-        error?.message ||
-        "Video generation failed.";
-
-      state.message =
-        state.error;
-
-      emit("error", {
-        message:
-          state.error,
-
-        error
+      emit("change", {
+        state: getState()
       });
 
       return {
         success: false,
-
-        error:
-          state.error
+        errors: [state.error]
       };
     }
   }
 
-  /* =========================================================
-     CANCEL
-  ========================================================= */
+  /* Friendly aliases */
+  const loadSample = load;
+  const setSample = load;
 
-  function cancel() {
-    if (
-      !state.processing
-    ) {
-      return false;
-    }
+  /* ---------------------------------------------------------
+     8. Preview URL management
+     --------------------------------------------------------- */
 
-    state.status =
-      "cancelled";
-
-    state.message =
-      "Cancelling generation...";
-
-    emit("cancelled");
-
-    return true;
-  }
-
-  /* =========================================================
-     OPEN VIDEO
-  ========================================================= */
-
-  function openVideo() {
-    const url =
-      state.videoUrl;
-
-    if (!url) {
-      return false;
-    }
-
-    window.open(
-      url,
-      "_blank",
-      "noopener,noreferrer"
-    );
-
-    return true;
-  }
-
-  /* =========================================================
-     DOWNLOAD VIDEO
-  ========================================================= */
-
-  async function download(
-    fileName = "snk-ai-mentor-video"
-  ) {
-    const url =
-      state.downloadUrl ||
-      state.videoUrl;
-
-    if (!url) {
-      return false;
+  function revokePreviewUrl() {
+    if (!state.previewUrl) {
+      return;
     }
 
     try {
-      const response =
-        await fetch(url);
+      URL.revokeObjectURL(state.previewUrl);
+    } catch (_) {}
 
-      if (!response.ok) {
-        throw new Error(
-          "Unable to download video."
-        );
-      }
-
-      const blob =
-        await response.blob();
-
-      const blobUrl =
-        URL.createObjectURL(
-          blob
-        );
-
-      const anchor =
-        document.createElement(
-          "a"
-        );
-
-      anchor.href =
-        blobUrl;
-
-      anchor.download =
-        `${fileName}.mp4`;
-
-      document.body.appendChild(
-        anchor
-      );
-
-      anchor.click();
-
-      anchor.remove();
-
-      setTimeout(
-        () => {
-          URL.revokeObjectURL(
-            blobUrl
-          );
-        },
-        1000
-      );
-
-      return true;
-
-    } catch (error) {
-      /*
-        Cross-origin provider URLs may block fetch.
-        In that case fallback to opening the URL.
-      */
-
-      try {
-        const anchor =
-          document.createElement(
-            "a"
-          );
-
-        anchor.href =
-          url;
-
-        anchor.target =
-          "_blank";
-
-        anchor.rel =
-          "noopener noreferrer";
-
-        anchor.click();
-
-        return true;
-      } catch (_) {
-        console.error(
-          "[SNK Video] Download failed:",
-          error
-        );
-
-        return false;
-      }
-    }
+    state.previewUrl = "";
   }
 
-  /* =========================================================
-     RESULT
-  ========================================================= */
+  function getPreviewUrl() {
+    return state.previewUrl;
+  }
 
-  function getResult() {
-    return state.result
-      ? {
-          ...state.result
-        }
-      : null;
+  /* ---------------------------------------------------------
+     9. Clear
+     --------------------------------------------------------- */
+
+  function clear() {
+    revokePreviewUrl();
+
+    state.ready = false;
+    state.loading = false;
+    state.file = null;
+
+    state.metadata = {
+      name: "",
+      size: 0,
+      sizeLabel: "",
+      type: "",
+      extension: "",
+      duration: 0,
+      durationLabel: "",
+      lastModified: 0
+    };
+
+    state.error = "";
+    state.loadedAt = null;
+
+    emit("cleared", {
+      state: getState()
+    });
+
+    emit("change", {
+      state: getState()
+    });
+  }
+
+  const reset = clear;
+
+  /* ---------------------------------------------------------
+     10. Provider
+     --------------------------------------------------------- */
+
+  function setProvider(providerId) {
+    const provider = String(providerId || "")
+      .trim()
+      .toLowerCase();
+
+    if (!supportsProvider(provider)) {
+      return false;
+    }
+
+    state.provider = provider;
+
+    emit("providerchange", {
+      provider,
+      providerInfo: getProvider(provider),
+      state: getState()
+    });
+
+    return true;
+  }
+
+  function getProvider(providerId = state.provider) {
+    return (
+      SUPPORTED_PROVIDERS.find(
+        (item) => item.id === providerId
+      ) || null
+    );
+  }
+
+  function getSupportedProviders() {
+    return SUPPORTED_PROVIDERS.map((provider) => ({
+      ...provider
+    }));
+  }
+
+  function supportsProvider(providerId) {
+    return SUPPORTED_PROVIDERS.some(
+      (provider) => provider.id === providerId
+    );
+  }
+
+  /* ---------------------------------------------------------
+     11. Readiness
+     --------------------------------------------------------- */
+
+  function isReady() {
+    return Boolean(
+      state.ready &&
+      state.file &&
+      state.previewUrl &&
+      state.metadata.name
+    );
+  }
+
+  function getReadiness() {
+    const checks = [
+      {
+        id: "file",
+        label: "Voice sample selected",
+        ready: Boolean(state.file)
+      },
+      {
+        id: "format",
+        label: "Supported audio format",
+        ready: Boolean(
+          state.file && isAudioFile(state.file)
+        )
+      },
+      {
+        id: "size",
+        label: "File size accepted",
+        ready: Boolean(
+          state.file &&
+          state.file.size > 0 &&
+          state.file.size <= MAX_FILE_SIZE
+        )
+      },
+      {
+        id: "metadata",
+        label: "Audio metadata readable",
+        ready: Boolean(
+          state.metadata.duration >= 0 &&
+          state.metadata.name
+        )
+      },
+      {
+        id: "preview",
+        label: "Audio preview ready",
+        ready: Boolean(state.previewUrl)
+      }
+    ];
+
+    const passed = checks.filter(
+      (check) => check.ready
+    ).length;
+
+    return {
+      ready: isReady(),
+      checks,
+      passed,
+      total: checks.length,
+      percentage: Math.round(
+        (passed / checks.length) * 100
+      ),
+      error: state.error || ""
+    };
+  }
+
+  /* ---------------------------------------------------------
+     12. Getters
+     --------------------------------------------------------- */
+
+  function getFile() {
+    return state.file;
+  }
+
+  function getSample() {
+    return state.file;
+  }
+
+  function getMetadata() {
+    return {
+      ...state.metadata
+    };
+  }
+
+  function getDuration() {
+    return Number(state.metadata.duration) || 0;
   }
 
   function getState() {
     return {
-      ...state
+      ready: state.ready,
+      loading: state.loading,
+
+      hasFile: Boolean(state.file),
+
+      metadata: {
+        ...state.metadata
+      },
+
+      previewUrl: state.previewUrl,
+
+      provider: state.provider,
+
+      error: state.error,
+
+      loadedAt: state.loadedAt
     };
   }
 
-  function reset() {
-    if (
-      state.videoUrl &&
-      state.videoUrl.startsWith(
-        "blob:"
-      )
-    ) {
-      try {
-        URL.revokeObjectURL(
-          state.videoUrl
-        );
-      } catch (_) {}
-    }
+  /* ---------------------------------------------------------
+     13. Provider-independent payload
+     --------------------------------------------------------- */
 
-    state.processing =
-      false;
+  function buildPayload(options = {}) {
+    const provider =
+      options.provider ||
+      state.provider ||
+      "demo";
 
-    state.progress =
-      0;
+    return {
+      source: "snk-ai-mentor",
+      engine: "voice",
+      provider,
 
-    state.status =
-      "idle";
+      sample: {
+        available: Boolean(state.file),
+        name: state.metadata.name,
+        size: state.metadata.size,
+        type: state.metadata.type,
+        extension: state.metadata.extension,
+        duration: state.metadata.duration
+      },
 
-    state.message =
-      "";
+      voice: {
+        cloneRequested:
+          options.cloneRequested !== false,
+        language:
+          options.language ||
+          "auto",
+        preserveNaturalTone:
+          options.preserveNaturalTone !== false
+      },
 
-    state.error =
-      "";
-
-    state.jobId =
-      "";
-
-    state.videoUrl =
-      "";
-
-    state.downloadUrl =
-      "";
-
-    state.thumbnailUrl =
-      "";
-
-    state.startedAt =
-      null;
-
-    state.completedAt =
-      null;
-
-    state.lastPayload =
-      null;
-
-    state.result =
-      null;
-
-    emit("reset");
+      security: {
+        rawFileIncluded: false,
+        browserOnlyMetadata: true
+      }
+    };
   }
 
-  /* =========================================================
-     PUBLIC API
-  ========================================================= */
+  /* ---------------------------------------------------------
+     14. FormData helper
+     --------------------------------------------------------- */
 
-  const Video = {
-    version:
-      "2.0.0",
+  function appendToFormData(
+    formData,
+    fieldName = "voiceSample"
+  ) {
+    if (
+      !formData ||
+      typeof formData.append !== "function"
+    ) {
+      throw new Error(
+        "A valid FormData instance is required."
+      );
+    }
 
-    state,
+    if (!state.file) {
+      throw new Error(
+        "No voice sample is loaded."
+      );
+    }
 
-    generate,
+    formData.append(
+      fieldName,
+      state.file,
+      state.file.name || "voice-sample"
+    );
 
-    validate,
-    buildPayload,
+    return formData;
+  }
 
-    checkEngineReadiness,
+  /* ---------------------------------------------------------
+     15. Provider preparation
+     --------------------------------------------------------- */
 
-    cancel,
+  function prepareForProvider(
+    providerId = state.provider,
+    options = {}
+  ) {
+    const provider = getProvider(providerId);
+
+    if (!provider) {
+      return {
+        success: false,
+        error: "Unsupported voice provider."
+      };
+    }
+
+    if (!isReady()) {
+      return {
+        success: false,
+        error:
+          state.error ||
+          "Voice sample is not ready."
+      };
+    }
+
+    /*
+      Demo mode:
+      Return metadata only.
+
+      Live providers:
+      Return provider-independent information.
+      Actual provider-specific upload/authentication
+      must be performed by a secure backend.
+    */
+
+    const payload = buildPayload({
+      ...options,
+      provider: provider.id
+    });
+
+    return {
+      success: true,
+
+      provider: provider.id,
+      providerName: provider.name,
+
+      mode: provider.live
+        ? "live"
+        : "demo",
+
+      payload,
+
+      file: state.file,
+
+      previewUrl: state.previewUrl,
+
+      requiresBackend: Boolean(provider.live),
+
+      message: provider.live
+        ? "Voice sample is prepared. A secure backend/provider integration is required for actual voice processing."
+        : "Demo voice sample is ready."
+    };
+  }
+
+  /* ---------------------------------------------------------
+     16. File input helper
+     --------------------------------------------------------- */
+
+  async function handleInput(input) {
+    if (!input || !input.files) {
+      return {
+        success: false,
+        errors: ["Invalid file input."]
+      };
+    }
+
+    const file = input.files[0];
+
+    if (!file) {
+      return {
+        success: false,
+        errors: ["No voice sample selected."]
+      };
+    }
+
+    return load(file);
+  }
+
+  /* ---------------------------------------------------------
+     17. Destroy
+     --------------------------------------------------------- */
+
+  function destroy() {
+    clear();
+
+    Object.keys(EVENTS).forEach(
+      (eventName) => {
+        EVENTS[eventName] = [];
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     18. Public API
+     --------------------------------------------------------- */
+
+  const Voice = {
+    /* lifecycle */
+    load,
+    loadSample,
+    setSample,
+    clear,
     reset,
+    destroy,
 
-    openVideo,
-    download,
+    /* input */
+    handleInput,
+    validateFile,
 
-    getResult,
+    /* file */
+    getFile,
+    getSample,
+    getPreviewUrl,
+    getMetadata,
+    getDuration,
+
+    /* readiness */
+    isReady,
+    getReadiness,
+
+    /* provider */
+    setProvider,
+    getProvider,
+    getSupportedProviders,
+    supportsProvider,
+    prepareForProvider,
+
+    /* payload */
+    buildPayload,
+    appendToFormData,
+
+    /* state */
     getState,
 
-    isDemoMode,
-    getMode,
-    getProvider,
+    /* events */
+    on,
 
-    on
+    /* constants */
+    MAX_FILE_SIZE,
+    MAX_FILE_SIZE_LABEL: formatBytes(
+      MAX_FILE_SIZE
+    ),
+    SUPPORTED_EXTENSIONS:
+      SUPPORTED_EXTENSIONS.slice(),
+    SUPPORTED_MIME_TYPES:
+      SUPPORTED_MIME_TYPES.slice()
   };
 
-  NS.Video =
-    Video;
+  /* ---------------------------------------------------------
+     19. Expose
+     --------------------------------------------------------- */
 
-  emit("loaded", {
-    version:
-      Video.version
+  window.SNKAI.Voice = Voice;
+
+  /* ---------------------------------------------------------
+     20. Initial event
+     --------------------------------------------------------- */
+
+  emit("ready", {
+    engine: "voice",
+    version: "1.0.0"
   });
 
+  console.log(
+    "%cSNK AI Mentor%c Voice Engine loaded.",
+    "font-weight:700;color:#7dd3fc;",
+    "font-weight:400;color:inherit;"
+  );
 })();
