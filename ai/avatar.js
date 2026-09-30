@@ -1,1294 +1,640 @@
 /* =========================================================
    SNK AI MENTOR
    ai/avatar.js
-   ---------------------------------------------------------
-   AI AVATAR ENGINE
-   ---------------------------------------------------------
-
-   Responsibilities:
-   1. Mentor face video validation
-   2. Avatar source management
-   3. Avatar settings
-   4. Provider readiness check
-   5. Avatar generation payload
-   6. Future API integration point
-   7. Demo-mode avatar simulation
-   8. Event system for other modules
-
-   IMPORTANT:
-   Real AI face cloning/generation should be handled by
-   a secure backend/provider. Never expose private API keys
-   inside GitHub Pages JavaScript.
+   Step 15 — Provider-Ready Avatar Engine
    ========================================================= */
 
 (() => {
-
   "use strict";
-
-
-  /* ---------------------------------------------------------
-     1. GLOBAL NAMESPACE
-     --------------------------------------------------------- */
 
   window.SNKAI = window.SNKAI || {};
 
-
-  /* ---------------------------------------------------------
-     2. INTERNAL STATE
-     --------------------------------------------------------- */
+  const NS = window.SNKAI;
+  const EVENTS = {};
 
   const state = {
-
-    initialized: false,
-
-    source: null,
-
-    sourceType: "video",
-
-    fileName: "",
-
-    fileSize: 0,
-
-    fileType: "",
-
-    objectUrl: "",
-
+    sourceFile: null,
+    objectUrl: null,
+    metadata: {
+      name: "",
+      type: "",
+      size: 0,
+      sizeMB: 0,
+      duration: 0,
+      width: 0,
+      height: 0,
+      aspectRatio: "",
+      lastUpdated: null
+    },
     ready: false,
-
-    processing: false,
-
-    progress: 0,
-
-    jobId: null,
-
-    error: null,
-
-    settings: {
-
-      position: "right",
-
-      size: "medium",
-
-      background: "studio",
-
-      crop: "contain",
-
-      mirror: false,
-
-      enabled: true
-
-    }
-
+    error: "",
+    checking: false
   };
 
-
   /* ---------------------------------------------------------
-     3. EVENT SYSTEM
-     --------------------------------------------------------- */
+     Helpers
+  --------------------------------------------------------- */
 
-  const events = {};
+  function emit(eventName, detail = {}) {
+    const handlers = EVENTS[eventName] || [];
 
-
-  function on(eventName, callback) {
-
-    if (typeof callback !== "function") {
-      return;
-    }
-
-    if (!events[eventName]) {
-      events[eventName] = [];
-    }
-
-    events[eventName].push(callback);
-
-  }
-
-
-  function off(eventName, callback) {
-
-    if (!events[eventName]) {
-      return;
-    }
-
-    events[eventName] =
-      events[eventName].filter(
-        fn => fn !== callback
-      );
-
-  }
-
-
-  function emit(eventName, data = {}) {
-
-    if (!events[eventName]) {
-      return;
-    }
-
-    events[eventName].forEach(
-      callback => {
-
-        try {
-
-          callback(data);
-
-        } catch (err) {
-
-          console.error(
-            "[SNK AI Avatar]",
-            err
-          );
-
-        }
-
-      }
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     4. FILE VALIDATION
-     --------------------------------------------------------- */
-
-  function validateVideoFile(file) {
-
-    const result = {
-
-      valid: false,
-
-      error: "",
-
-      file: file || null
-
-    };
-
-
-    if (!file) {
-
-      result.error =
-        "No mentor face video selected.";
-
-      return result;
-
-    }
-
-
-    if (!file.type) {
-
-      result.error =
-        "The selected file type could not be detected.";
-
-      return result;
-
-    }
-
-
-    if (!file.type.startsWith("video/")) {
-
-      result.error =
-        "Please select a valid video file.";
-
-      return result;
-
-    }
-
-
-    const config =
-      window.SNKAI.AIConfig
-        ? window.SNKAI.AIConfig.getConfig()
-        : null;
-
-
-    const maxMB =
-      config &&
-      config.limits &&
-      config.limits.faceVideoMB
-        ? config.limits.faceVideoMB
-        : 500;
-
-
-    const maxBytes =
-      maxMB * 1024 * 1024;
-
-
-    if (file.size > maxBytes) {
-
-      result.error =
-        `Video is too large. Maximum allowed size is ${maxMB} MB.`;
-
-      return result;
-
-    }
-
-
-    result.valid = true;
-
-    return result;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     5. SET VIDEO SOURCE
-     --------------------------------------------------------- */
-
-  function setSource(file) {
-
-    const validation =
-      validateVideoFile(file);
-
-
-    if (!validation.valid) {
-
-      state.error =
-        validation.error;
-
-      state.ready = false;
-
-      emit(
-        "error",
-        {
-          message: validation.error
-        }
-      );
-
-      return false;
-
-    }
-
-
-    clearObjectUrl();
-
-
-    state.source = file;
-
-    state.sourceType = "video";
-
-    state.fileName = file.name;
-
-    state.fileSize = file.size;
-
-    state.fileType = file.type;
-
-    state.objectUrl =
-      URL.createObjectURL(file);
-
-    state.ready = true;
-
-    state.error = null;
-
-    state.progress = 100;
-
-
-    emit(
-      "sourceChanged",
-      getState()
-    );
-
-
-    emit(
-      "ready",
-      getState()
-    );
-
-
-    return true;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     6. CLEAR SOURCE
-     --------------------------------------------------------- */
-
-  function clearSource() {
-
-    clearObjectUrl();
-
-
-    state.source = null;
-
-    state.fileName = "";
-
-    state.fileSize = 0;
-
-    state.fileType = "";
-
-    state.objectUrl = "";
-
-    state.ready = false;
-
-    state.processing = false;
-
-    state.progress = 0;
-
-    state.jobId = null;
-
-    state.error = null;
-
-
-    emit(
-      "sourceCleared",
-      getState()
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     7. OBJECT URL CLEANUP
-     --------------------------------------------------------- */
-
-  function clearObjectUrl() {
-
-    if (state.objectUrl) {
-
+    handlers.forEach((handler) => {
       try {
-
-        URL.revokeObjectURL(
-          state.objectUrl
-        );
-
-      } catch (err) {
-
-        console.warn(
-          "[SNK AI Avatar] URL cleanup failed.",
-          err
-        );
-
+        handler(detail);
+      } catch (error) {
+        console.error("[SNK Avatar] Event handler error:", error);
       }
-
-    }
-
-  }
-
-
-  /* ---------------------------------------------------------
-     8. SET AVATAR SETTINGS
-     --------------------------------------------------------- */
-
-  function setSettings(newSettings = {}) {
-
-    state.settings = {
-
-      ...state.settings,
-
-      ...newSettings
-
-    };
-
-
-    emit(
-      "settingsChanged",
-      getSettings()
-    );
-
-
-    return getSettings();
-
-  }
-
-
-  /* ---------------------------------------------------------
-     9. UPDATE SINGLE SETTING
-     --------------------------------------------------------- */
-
-  function setSetting(key, value) {
-
-    if (!key) {
-      return false;
-    }
-
-    state.settings[key] =
-      value;
-
-
-    emit(
-      "settingsChanged",
-      getSettings()
-    );
-
-
-    return true;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     10. GET SETTINGS
-     --------------------------------------------------------- */
-
-  function getSettings() {
-
-    return {
-      ...state.settings
-    };
-
-  }
-
-
-  /* ---------------------------------------------------------
-     11. POSITION PRESETS
-     --------------------------------------------------------- */
-
-  function setPosition(position) {
-
-    const allowed = [
-
-      "left",
-
-      "center",
-
-      "right"
-
-    ];
-
-
-    if (!allowed.includes(position)) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "position",
-      position
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     12. SIZE PRESETS
-     --------------------------------------------------------- */
-
-  function setSize(size) {
-
-    const allowed = [
-
-      "small",
-
-      "medium",
-
-      "large"
-
-    ];
-
-
-    if (!allowed.includes(size)) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "size",
-      size
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     13. BACKGROUND PRESETS
-     --------------------------------------------------------- */
-
-  function setBackground(background) {
-
-    const allowed = [
-
-      "studio",
-
-      "transparent",
-
-      "white",
-
-      "dark",
-
-      "custom"
-
-    ];
-
-
-    if (!allowed.includes(background)) {
-
-      return false;
-
-    }
-
-
-    return setSetting(
-      "background",
-      background
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     14. MIRROR
-     --------------------------------------------------------- */
-
-  function setMirror(enabled) {
-
-    return setSetting(
-      "mirror",
-      Boolean(enabled)
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     15. ENABLE / DISABLE
-     --------------------------------------------------------- */
-
-  function setEnabled(enabled) {
-
-    return setSetting(
-      "enabled",
-      Boolean(enabled)
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     16. PROVIDER CAPABILITY CHECK
-     --------------------------------------------------------- */
-
-  function checkProvider() {
-
-    const AIConfig =
-      window.SNKAI.AIConfig;
-
-
-    if (!AIConfig) {
-
-      return {
-
-        available: false,
-
-        message:
-          "AI configuration module is not loaded."
-
-      };
-
-    }
-
-
-    const provider =
-      AIConfig.getProvider();
-
-
-    if (!provider) {
-
-      return {
-
-        available: false,
-
-        message:
-          "No AI avatar provider is configured."
-
-      };
-
-    }
-
-
-    const capabilities =
-      provider.capabilities || {};
-
-
-    if (!capabilities.avatar) {
-
-      return {
-
-        available: false,
-
-        message:
-          "The current provider does not support AI avatar generation."
-
-      };
-
-    }
-
-
-    return {
-
-      available: true,
-
-      provider: provider
-
-    };
-
-  }
-
-
-  /* ---------------------------------------------------------
-     17. BUILD AVATAR PAYLOAD
-     --------------------------------------------------------- */
-
-  function buildPayload(options = {}) {
-
-    return {
-
-      type: "avatar-generation",
-
-      source: {
-
-        name: state.fileName,
-
-        mimeType: state.fileType,
-
-        size: state.fileSize
-
-      },
-
-      settings: {
-
-        ...state.settings,
-
-        ...(options.settings || {})
-
-      },
-
-      mentor: {
-
-        name:
-          options.mentorName ||
-          "SNK AI Mentor"
-
-      },
-
-      output: {
-
-        format:
-          options.format ||
-          "mp4",
-
-        resolution:
-          options.resolution ||
-          "1080p",
-
-        aspectRatio:
-          options.aspectRatio ||
-          "16:9"
-
-      },
-
-      createdAt:
-        new Date().toISOString()
-
-    };
-
-  }
-
-
-  /* ---------------------------------------------------------
-     18. DEMO AVATAR PROCESS
-     --------------------------------------------------------- */
-
-  function demoGenerate(options = {}) {
-
-    if (!state.ready) {
-
-      const message =
-        "Please upload a mentor face video first.";
-
-      state.error = message;
-
-      emit(
-        "error",
-        {
-          message
-        }
-      );
-
-      return Promise.reject(
-        new Error(message)
-      );
-
-    }
-
-
-    state.processing = true;
-
-    state.progress = 0;
-
-    state.error = null;
-
-
-    emit(
-      "generationStarted",
-      getState()
-    );
-
-
-    return new Promise(resolve => {
-
-      let progress = 0;
-
-
-      const timer =
-        setInterval(() => {
-
-          progress += 10;
-
-          state.progress =
-            Math.min(
-              progress,
-              100
-            );
-
-
-          emit(
-            "progress",
-            {
-              progress:
-                state.progress
-            }
-          );
-
-
-          if (progress >= 100) {
-
-            clearInterval(timer);
-
-
-            state.processing =
-              false;
-
-
-            state.jobId =
-              "demo-avatar-" +
-              Date.now();
-
-
-            emit(
-              "generationCompleted",
-              {
-                jobId:
-                  state.jobId,
-
-                payload:
-                  buildPayload(options),
-
-                demo: true
-              }
-            );
-
-
-            resolve({
-
-              success: true,
-
-              demo: true,
-
-              jobId:
-                state.jobId,
-
-              payload:
-                buildPayload(options)
-
-            });
-
-          }
-
-        }, 120);
-
     });
 
+    try {
+      window.dispatchEvent(
+        new CustomEvent(`snk-avatar:${eventName}`, {
+          detail
+        })
+      );
+    } catch (_) {}
   }
 
+  function on(eventName, handler) {
+    if (typeof handler !== "function") return () => {};
 
-  /* ---------------------------------------------------------
-     19. LIVE GENERATION
-     --------------------------------------------------------- */
-
-  async function generate(options = {}) {
-
-    const AIConfig =
-      window.SNKAI.AIConfig;
-
-
-    if (!AIConfig) {
-
-      const error =
-        new Error(
-          "AI configuration is not loaded."
-        );
-
-      state.error =
-        error.message;
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-      throw error;
-
+    if (!EVENTS[eventName]) {
+      EVENTS[eventName] = [];
     }
 
+    EVENTS[eventName].push(handler);
 
-    if (!state.ready) {
-
-      const error =
-        new Error(
-          "Please upload a mentor face video first."
-        );
-
-      state.error =
-        error.message;
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
+    return () => {
+      EVENTS[eventName] = EVENTS[eventName].filter(
+        (item) => item !== handler
       );
+    };
+  }
 
-      throw error;
+  function bytesToMB(bytes) {
+    return Number((bytes / (1024 * 1024)).toFixed(2));
+  }
 
+  function getExtension(fileName = "") {
+    const parts = fileName.split(".");
+    return parts.length > 1
+      ? parts.pop().toLowerCase()
+      : "";
+  }
+
+  function isVideoFile(file) {
+    if (!file) return false;
+
+    const allowedExtensions = [
+      "mp4",
+      "webm",
+      "mov",
+      "m4v",
+      "avi"
+    ];
+
+    const extension = getExtension(file.name);
+
+    if (file.type && file.type.startsWith("video/")) {
+      return true;
     }
 
+    return allowedExtensions.includes(extension);
+  }
 
-    const config =
-      AIConfig.getConfig();
+  function getAspectRatio(width, height) {
+    if (!width || !height) return "";
 
+    const ratio = width / height;
 
-    /*
-     * Demo mode
-     */
-
-    if (
-      config.mode === "demo"
-    ) {
-
-      return demoGenerate(
-        options
-      );
-
+    if (Math.abs(ratio - 16 / 9) < 0.04) {
+      return "16:9";
     }
 
-
-    /*
-     * Live mode
-     */
-
-    const url =
-      AIConfig.getGenerateUrl();
-
-
-    if (!url) {
-
-      const error =
-        new Error(
-          "AI avatar generation endpoint is not configured."
-        );
-
-      state.error =
-        error.message;
-
-      emit(
-        "error",
-        {
-          message:
-            error.message
-        }
-      );
-
-      throw error;
-
+    if (Math.abs(ratio - 9 / 16) < 0.04) {
+      return "9:16";
     }
 
+    if (Math.abs(ratio - 4 / 3) < 0.04) {
+      return "4:3";
+    }
 
-    state.processing = true;
+    if (Math.abs(ratio - 1) < 0.04) {
+      return "1:1";
+    }
 
-    state.progress = 5;
+    return ratio.toFixed(2);
+  }
 
-    state.error = null;
-
-
-    emit(
-      "generationStarted",
-      getState()
-    );
-
+  function revokeObjectUrl() {
+    if (!state.objectUrl) return;
 
     try {
+      URL.revokeObjectURL(state.objectUrl);
+    } catch (_) {}
 
-      /*
-       * NOTE:
-       * This is the generic integration point.
-       *
-       * The exact request format will be adapted when
-       * the real provider/backend is selected.
-       */
+    state.objectUrl = null;
+  }
 
-      const payload =
-        buildPayload(options);
+  /* ---------------------------------------------------------
+     Video metadata
+  --------------------------------------------------------- */
 
-
-      const response =
-        await fetch(
-          url,
-          {
-
-            method: "POST",
-
-            headers:
-              AIConfig.buildHeaders(),
-
-            body:
-              JSON.stringify(payload)
-
-          }
-        );
-
-
-      if (!response.ok) {
-
-        throw new Error(
-          `Avatar API request failed (${response.status}).`
-        );
-
+  function readVideoMetadata(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error("No video file selected."));
+        return;
       }
 
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
 
-      const data =
-        await response.json();
+      let finished = false;
 
+      const cleanup = () => {
+        video.removeAttribute("src");
+        video.load();
 
-      state.progress = 100;
-
-      state.processing = false;
-
-      state.jobId =
-        data.jobId ||
-        data.id ||
-        null;
-
-
-      emit(
-        "generationCompleted",
-        {
-
-          jobId:
-            state.jobId,
-
-          response:
-            data,
-
-          demo: false
-
-        }
-      );
-
-
-      return {
-
-        success: true,
-
-        demo: false,
-
-        jobId:
-          state.jobId,
-
-        response:
-          data
-
+        try {
+          URL.revokeObjectURL(url);
+        } catch (_) {}
       };
 
-    } catch (err) {
+      const complete = (result) => {
+        if (finished) return;
 
-      state.processing = false;
+        finished = true;
+        cleanup();
+        resolve(result);
+      };
 
-      state.error =
-        err.message ||
-        "Avatar generation failed.";
+      const fail = (message) => {
+        if (finished) return;
 
-      emit(
-        "error",
-        {
-          message:
-            state.error
-        }
-      );
+        finished = true;
+        cleanup();
+        reject(new Error(message));
+      };
 
-      throw err;
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
 
-    }
+      video.addEventListener("loadedmetadata", () => {
+        complete({
+          duration: Number.isFinite(video.duration)
+            ? Number(video.duration.toFixed(2))
+            : 0,
 
+          width: video.videoWidth || 0,
+          height: video.videoHeight || 0,
+
+          aspectRatio: getAspectRatio(
+            video.videoWidth,
+            video.videoHeight
+          )
+        });
+      });
+
+      video.addEventListener("error", () => {
+        fail("The selected video could not be read.");
+      });
+
+      video.src = url;
+    });
   }
 
-
   /* ---------------------------------------------------------
-     20. CANCEL GENERATION
-     --------------------------------------------------------- */
+     Validation
+  --------------------------------------------------------- */
 
-  function cancel() {
-
-    if (!state.processing) {
-
-      return false;
-
+  function validateFile(file) {
+    if (!file) {
+      return {
+        valid: false,
+        message: "Please select a face video."
+      };
     }
 
-
-    state.processing = false;
-
-    state.error =
-      "Avatar generation cancelled.";
-
-
-    emit(
-      "cancelled",
-      getState()
-    );
-
-
-    return true;
-
-  }
-
-
-  /* ---------------------------------------------------------
-     21. GET STATE
-     --------------------------------------------------------- */
-
-  function getState() {
+    if (!isVideoFile(file)) {
+      return {
+        valid: false,
+        message: "Please select a valid video file."
+      };
+    }
 
     return {
-
-      initialized:
-        state.initialized,
-
-      sourceType:
-        state.sourceType,
-
-      fileName:
-        state.fileName,
-
-      fileSize:
-        state.fileSize,
-
-      fileType:
-        state.fileType,
-
-      objectUrl:
-        state.objectUrl,
-
-      ready:
-        state.ready,
-
-      processing:
-        state.processing,
-
-      progress:
-        state.progress,
-
-      jobId:
-        state.jobId,
-
-      error:
-        state.error,
-
-      settings:
-        getSettings()
-
+      valid: true,
+      message: ""
     };
-
   }
 
-
   /* ---------------------------------------------------------
-     22. RESET
-     --------------------------------------------------------- */
+     Set source
+  --------------------------------------------------------- */
 
-  function reset() {
+  async function setSource(file) {
+    state.error = "";
+    state.checking = true;
 
-    clearSource();
+    emit("checking", {
+      file
+    });
 
+    const validation = validateFile(file);
 
-    state.settings = {
+    if (!validation.valid) {
+      state.ready = false;
+      state.checking = false;
+      state.error = validation.message;
 
-      position: "right",
+      emit("error", {
+        message: validation.message
+      });
 
-      size: "medium",
-
-      background: "studio",
-
-      crop: "contain",
-
-      mirror: false,
-
-      enabled: true
-
-    };
-
-
-    state.error = null;
-
-
-    emit(
-      "reset",
-      getState()
-    );
-
-  }
-
-
-  /* ---------------------------------------------------------
-     23. INITIALIZE
-     --------------------------------------------------------- */
-
-  function init() {
-
-    if (state.initialized) {
-
-      return getState();
-
+      return {
+        success: false,
+        error: validation.message
+      };
     }
 
+    try {
+      revokeObjectUrl();
 
-    state.initialized = true;
+      const videoInfo = await readVideoMetadata(file);
 
+      state.sourceFile = file;
+      state.objectUrl = URL.createObjectURL(file);
+
+      state.metadata = {
+        name: file.name || "face-video",
+        type: file.type || "video/*",
+        size: file.size || 0,
+        sizeMB: bytesToMB(file.size || 0),
+        duration: videoInfo.duration,
+        width: videoInfo.width,
+        height: videoInfo.height,
+        aspectRatio: videoInfo.aspectRatio,
+        lastUpdated: new Date().toISOString()
+      };
+
+      state.ready = true;
+      state.error = "";
+      state.checking = false;
+
+      emit("ready", {
+        file,
+        metadata: getMetadata(),
+        previewUrl: state.objectUrl
+      });
+
+      return {
+        success: true,
+        file,
+        metadata: getMetadata(),
+        previewUrl: state.objectUrl
+      };
+
+    } catch (error) {
+      state.sourceFile = null;
+      state.ready = false;
+      state.checking = false;
+      state.error =
+        error?.message || "Unable to process the face video.";
+
+      emit("error", {
+        message: state.error
+      });
+
+      return {
+        success: false,
+        error: state.error
+      };
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Clear source
+  --------------------------------------------------------- */
+
+  function clearSource() {
+    revokeObjectUrl();
+
+    state.sourceFile = null;
+
+    state.metadata = {
+      name: "",
+      type: "",
+      size: 0,
+      sizeMB: 0,
+      duration: 0,
+      width: 0,
+      height: 0,
+      aspectRatio: "",
+      lastUpdated: null
+    };
+
+    state.ready = false;
+    state.error = "";
+    state.checking = false;
+
+    emit("cleared");
+
+    return true;
+  }
+
+  /* ---------------------------------------------------------
+     Getters
+  --------------------------------------------------------- */
+
+  function getSource() {
+    return state.sourceFile;
+  }
+
+  function getPreviewUrl() {
+    return state.objectUrl || "";
+  }
+
+  function getMetadata() {
+    return {
+      ...state.metadata
+    };
+  }
+
+  function isReady() {
+    return Boolean(state.ready && state.sourceFile);
+  }
+
+  function getError() {
+    return state.error || "";
+  }
+
+  function isChecking() {
+    return Boolean(state.checking);
+  }
+
+  /* ---------------------------------------------------------
+     Provider configuration
+  --------------------------------------------------------- */
+
+  function getAIConfig() {
+    return NS.AIConfig || null;
+  }
+
+  function getProvider() {
+    const config = getAIConfig();
+
+    if (!config || typeof config.getProvider !== "function") {
+      return "demo";
+    }
+
+    return config.getProvider();
+  }
+
+  function isDemoMode() {
+    const config = getAIConfig();
+
+    if (!config) return true;
+
+    if (typeof config.isDemoMode === "function") {
+      return config.isDemoMode();
+    }
+
+    return getProvider() === "demo";
+  }
+
+  function isLiveMode() {
+    const config = getAIConfig();
+
+    if (!config) return false;
+
+    if (typeof config.isLiveMode === "function") {
+      return config.isLiveMode();
+    }
+
+    return !isDemoMode();
+  }
+
+  /* ---------------------------------------------------------
+     Provider readiness
+  --------------------------------------------------------- */
+
+  function checkProvider() {
+    const config = getAIConfig();
+
+    if (!config) {
+      return {
+        ready: true,
+        mode: "demo",
+        provider: "demo",
+        message: "Demo avatar engine is available."
+      };
+    }
+
+    const mode =
+      typeof config.getMode === "function"
+        ? config.getMode()
+        : "demo";
+
+    const provider = getProvider();
+
+    if (mode === "demo") {
+      return {
+        ready: true,
+        mode: "demo",
+        provider,
+        message: "Demo avatar engine is ready."
+      };
+    }
 
     /*
-     * Use defaults from AI config when available.
-     */
+      IMPORTANT:
+
+      Live provider calls must normally go through your own
+      backend/server. Never expose a private provider API key
+      inside GitHub Pages frontend JavaScript.
+
+      Therefore live mode is considered configured only when
+      the AI configuration layer reports the necessary backend
+      connection.
+    */
+
+    let connectionReady = false;
 
     if (
-      window.SNKAI.AIConfig
+      typeof config.isConfigured === "function"
     ) {
-
-      const config =
-        window.SNKAI.AIConfig;
-
-
-      const avatar =
-        config.getAvatarSettings();
-
-
-      if (avatar) {
-
-        state.settings.position =
-          avatar.defaultPosition ||
-          state.settings.position;
-
-        state.settings.background =
-          avatar.defaultBackground ||
-          state.settings.background;
-
-        state.settings.enabled =
-          avatar.enabled !== undefined
-            ? avatar.enabled
-            : state.settings.enabled;
-
-      }
-
+      connectionReady = config.isConfigured();
     }
 
+    if (!connectionReady) {
+      return {
+        ready: false,
+        mode: "live",
+        provider,
+        message:
+          "Live avatar provider is not configured. Connect a secure backend/API."
+      };
+    }
 
-    emit(
-      "initialized",
-      getState()
-    );
-
-
-    return getState();
-
+    return {
+      ready: true,
+      mode: "live",
+      provider,
+      message:
+        "Live avatar provider configuration is available."
+    };
   }
 
+  /* ---------------------------------------------------------
+     Avatar readiness
+  --------------------------------------------------------- */
+
+  function checkReadiness() {
+    const provider = checkProvider();
+
+    if (!isReady()) {
+      return {
+        ready: false,
+        sourceReady: false,
+        providerReady: provider.ready,
+        mode: provider.mode,
+        provider: provider.provider,
+        message:
+          state.error ||
+          "Upload a face video before generating an AI mentor video."
+      };
+    }
+
+    if (!provider.ready) {
+      return {
+        ready: false,
+        sourceReady: true,
+        providerReady: false,
+        mode: provider.mode,
+        provider: provider.provider,
+        message: provider.message
+      };
+    }
+
+    return {
+      ready: true,
+      sourceReady: true,
+      providerReady: true,
+      mode: provider.mode,
+      provider: provider.provider,
+      message:
+        provider.mode === "demo"
+          ? "Avatar source is ready for demo generation."
+          : "Avatar source is ready for live generation."
+    };
+  }
 
   /* ---------------------------------------------------------
-     24. PUBLIC API
-     --------------------------------------------------------- */
+     Build provider-safe payload
+  --------------------------------------------------------- */
+
+  function buildPayload(options = {}) {
+    const readiness = checkReadiness();
+
+    if (!readiness.sourceReady) {
+      throw new Error(readiness.message);
+    }
+
+    /*
+      We intentionally DO NOT put the File object into JSON.
+
+      A real provider may require:
+      - multipart/form-data
+      - cloud storage URL
+      - provider asset ID
+      - signed upload URL
+
+      That upload step belongs in the secure backend layer.
+    */
+
+    return {
+      avatar: {
+        fileName: state.metadata.name,
+        mimeType: state.metadata.type,
+        size: state.metadata.size,
+        sizeMB: state.metadata.sizeMB,
+        duration: state.metadata.duration,
+        width: state.metadata.width,
+        height: state.metadata.height,
+        aspectRatio: state.metadata.aspectRatio
+      },
+
+      provider: {
+        name: readiness.provider,
+        mode: readiness.mode
+      },
+
+      options: {
+        ...options
+      },
+
+      client: {
+        application: "SNK AI Mentor",
+        engine: "avatar",
+        version: "1.0.0"
+      }
+    };
+  }
+
+  /* ---------------------------------------------------------
+     Export local source metadata
+  --------------------------------------------------------- */
+
+  function exportMetadata() {
+    return {
+      ready: isReady(),
+      metadata: getMetadata(),
+      provider: getProvider(),
+      mode: isDemoMode() ? "demo" : "live"
+    };
+  }
+
+  /* ---------------------------------------------------------
+     Public API
+  --------------------------------------------------------- */
 
   const Avatar = {
+    version: "1.0.0",
 
-    init,
-
-    on,
-
-    off,
-
-    emit,
-
-    getState,
-
-    getSettings,
-
-    setSettings,
-
-    setSetting,
+    state,
 
     setSource,
-
     clearSource,
 
-    validateVideoFile,
+    getSource,
+    getPreviewUrl,
+    getMetadata,
 
-    setPosition,
+    isReady,
+    isChecking,
+    getError,
 
-    setSize,
-
-    setBackground,
-
-    setMirror,
-
-    setEnabled,
+    getProvider,
+    isDemoMode,
+    isLiveMode,
 
     checkProvider,
+    checkReadiness,
 
     buildPayload,
+    exportMetadata,
 
-    generate,
+    validateFile,
 
-    cancel,
-
-    reset
-
+    on
   };
 
+  NS.Avatar = Avatar;
 
-  /* ---------------------------------------------------------
-     25. EXPORT
-     --------------------------------------------------------- */
-
-  window.SNKAI.Avatar =
-    Avatar;
-
-
-  /* ---------------------------------------------------------
-     26. AUTO INITIALIZE
-     --------------------------------------------------------- */
-
-  if (
-    document.readyState ===
-    "loading"
-  ) {
-
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => Avatar.init(),
-      {
-        once: true
-      }
-    );
-
-  } else {
-
-    Avatar.init();
-
-  }
-
+  emit("loaded", {
+    version: Avatar.version
+  });
 
 })();
