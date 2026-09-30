@@ -1,640 +1,1131 @@
 /* =========================================================
-   SNK AI MENTOR
-   ai/avatar.js
-   Step 15 — Provider-Ready Avatar Engine
+   SNK AI MENTOR — AVATAR ENGINE
+   File: ai/avatar.js
+
+   STEP 26
+   ---------------------------------------------------------
+   Personal Face / Avatar preparation engine.
+
+   Responsibilities:
+   - Receive personal face video
+   - Validate avatar source
+   - Read video metadata
+   - Create preview URL
+   - Store temporary in-memory asset
+   - Prepare provider-independent avatar payload
+   - Expose readiness state
+   - Provide clean API for future providers
+
+   IMPORTANT:
+   This browser-side engine does NOT clone a real face.
+   Actual avatar generation must be handled by an
+   authorized external AI provider / backend.
    ========================================================= */
 
 (() => {
   "use strict";
 
+
+  /* =======================================================
+     01. GLOBAL NAMESPACE
+     ======================================================= */
+
   window.SNKAI = window.SNKAI || {};
 
-  const NS = window.SNKAI;
-  const EVENTS = {};
+
+  /* =======================================================
+     02. CONSTANTS
+     ======================================================= */
+
+  const MAX_FILE_SIZE =
+    500 * 1024 * 1024;
+
+  const ALLOWED_TYPES = [
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-m4v"
+  ];
+
+
+  /* =======================================================
+     03. STATE
+     ======================================================= */
 
   const state = {
-    sourceFile: null,
-    objectUrl: null,
-    metadata: {
-      name: "",
-      type: "",
-      size: 0,
-      sizeMB: 0,
-      duration: 0,
-      width: 0,
-      height: 0,
-      aspectRatio: "",
-      lastUpdated: null
-    },
+
     ready: false,
+
+    file: null,
+
+    objectUrl: "",
+
+    metadata: {
+
+      name: "",
+
+      type: "",
+
+      size: 0,
+
+      duration: 0,
+
+      width: 0,
+
+      height: 0
+    },
+
+    status:
+      "No avatar video selected",
+
     error: "",
-    checking: false
+
+    updatedAt: null
   };
 
-  /* ---------------------------------------------------------
-     Helpers
-  --------------------------------------------------------- */
 
-  function emit(eventName, detail = {}) {
-    const handlers = EVENTS[eventName] || [];
+  /* =======================================================
+     04. EVENTS
+     ======================================================= */
 
-    handlers.forEach((handler) => {
-      try {
-        handler(detail);
-      } catch (error) {
-        console.error("[SNK Avatar] Event handler error:", error);
-      }
-    });
+  const listeners = new Map();
 
-    try {
-      window.dispatchEvent(
-        new CustomEvent(`snk-avatar:${eventName}`, {
-          detail
-        })
-      );
-    } catch (_) {}
-  }
 
-  function on(eventName, handler) {
-    if (typeof handler !== "function") return () => {};
+  function on(
+    eventName,
+    callback
+  ) {
 
-    if (!EVENTS[eventName]) {
-      EVENTS[eventName] = [];
+    if (
+      typeof callback !==
+      "function"
+    ) {
+      return () => {};
     }
 
-    EVENTS[eventName].push(handler);
+
+    if (
+      !listeners.has(
+        eventName
+      )
+    ) {
+
+      listeners.set(
+        eventName,
+        new Set()
+      );
+    }
+
+
+    listeners
+      .get(eventName)
+      .add(callback);
+
 
     return () => {
-      EVENTS[eventName] = EVENTS[eventName].filter(
-        (item) => item !== handler
-      );
+
+      listeners
+        .get(eventName)
+        ?.delete(callback);
     };
   }
 
-  function bytesToMB(bytes) {
-    return Number((bytes / (1024 * 1024)).toFixed(2));
-  }
 
-  function getExtension(fileName = "") {
-    const parts = fileName.split(".");
-    return parts.length > 1
-      ? parts.pop().toLowerCase()
-      : "";
-  }
+  function emit(
+    eventName,
+    data
+  ) {
 
-  function isVideoFile(file) {
-    if (!file) return false;
+    const callbacks =
+      listeners.get(eventName);
 
-    const allowedExtensions = [
-      "mp4",
-      "webm",
-      "mov",
-      "m4v",
-      "avi"
-    ];
 
-    const extension = getExtension(file.name);
-
-    if (file.type && file.type.startsWith("video/")) {
-      return true;
+    if (!callbacks) {
+      return;
     }
 
-    return allowedExtensions.includes(extension);
-  }
 
-  function getAspectRatio(width, height) {
-    if (!width || !height) return "";
-
-    const ratio = width / height;
-
-    if (Math.abs(ratio - 16 / 9) < 0.04) {
-      return "16:9";
-    }
-
-    if (Math.abs(ratio - 9 / 16) < 0.04) {
-      return "9:16";
-    }
-
-    if (Math.abs(ratio - 4 / 3) < 0.04) {
-      return "4:3";
-    }
-
-    if (Math.abs(ratio - 1) < 0.04) {
-      return "1:1";
-    }
-
-    return ratio.toFixed(2);
-  }
-
-  function revokeObjectUrl() {
-    if (!state.objectUrl) return;
-
-    try {
-      URL.revokeObjectURL(state.objectUrl);
-    } catch (_) {}
-
-    state.objectUrl = null;
-  }
-
-  /* ---------------------------------------------------------
-     Video metadata
-  --------------------------------------------------------- */
-
-  function readVideoMetadata(file) {
-    return new Promise((resolve, reject) => {
-      if (!file) {
-        reject(new Error("No video file selected."));
-        return;
-      }
-
-      const url = URL.createObjectURL(file);
-      const video = document.createElement("video");
-
-      let finished = false;
-
-      const cleanup = () => {
-        video.removeAttribute("src");
-        video.load();
+    callbacks.forEach(
+      (callback) => {
 
         try {
-          URL.revokeObjectURL(url);
-        } catch (_) {}
-      };
 
-      const complete = (result) => {
-        if (finished) return;
+          callback(
+            data,
+            getState()
+          );
 
-        finished = true;
-        cleanup();
-        resolve(result);
-      };
+        } catch (error) {
 
-      const fail = (message) => {
-        if (finished) return;
-
-        finished = true;
-        cleanup();
-        reject(new Error(message));
-      };
-
-      video.preload = "metadata";
-      video.muted = true;
-      video.playsInline = true;
-
-      video.addEventListener("loadedmetadata", () => {
-        complete({
-          duration: Number.isFinite(video.duration)
-            ? Number(video.duration.toFixed(2))
-            : 0,
-
-          width: video.videoWidth || 0,
-          height: video.videoHeight || 0,
-
-          aspectRatio: getAspectRatio(
-            video.videoWidth,
-            video.videoHeight
-          )
-        });
-      });
-
-      video.addEventListener("error", () => {
-        fail("The selected video could not be read.");
-      });
-
-      video.src = url;
-    });
+          console.error(
+            "SNK Avatar event error:",
+            error
+          );
+        }
+      }
+    );
   }
 
-  /* ---------------------------------------------------------
-     Validation
-  --------------------------------------------------------- */
 
-  function validateFile(file) {
+  /* =======================================================
+     05. HELPERS
+     ======================================================= */
+
+  function formatBytes(
+    bytes
+  ) {
+
+    if (
+      !bytes ||
+      bytes <= 0
+    ) {
+      return "0 KB";
+    }
+
+
+    const units = [
+      "Bytes",
+      "KB",
+      "MB",
+      "GB"
+    ];
+
+
+    const index =
+      Math.min(
+        Math.floor(
+          Math.log(bytes) /
+          Math.log(1024)
+        ),
+        units.length - 1
+      );
+
+
+    return `${(
+      bytes /
+      Math.pow(1024, index)
+    ).toFixed(
+      index === 0
+        ? 0
+        : 1
+    )} ${units[index]}`;
+  }
+
+
+  function normalizeType(
+    file
+  ) {
+
     if (!file) {
+      return "";
+    }
+
+
+    return (
+      file.type ||
+      ""
+    ).toLowerCase();
+  }
+
+
+  function isVideoFile(
+    file
+  ) {
+
+    if (!file) {
+      return false;
+    }
+
+
+    const type =
+      normalizeType(file);
+
+
+    return (
+      type.startsWith(
+        "video/"
+      ) ||
+      ALLOWED_TYPES.includes(
+        type
+      )
+    );
+  }
+
+
+  function isWithinSizeLimit(
+    file
+  ) {
+
+    return Boolean(
+      file &&
+      file.size <=
+        MAX_FILE_SIZE
+    );
+  }
+
+
+  function revokeObjectUrl() {
+
+    if (
+      state.objectUrl
+    ) {
+
+      try {
+
+        URL.revokeObjectURL(
+          state.objectUrl
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "Could not revoke avatar URL.",
+          error
+        );
+      }
+    }
+
+
+    state.objectUrl = "";
+  }
+
+
+  function resetMetadata() {
+
+    state.metadata = {
+
+      name: "",
+
+      type: "",
+
+      size: 0,
+
+      duration: 0,
+
+      width: 0,
+
+      height: 0
+    };
+  }
+
+
+  /* =======================================================
+     06. VALIDATION
+     ======================================================= */
+
+  function validateFile(
+    file
+  ) {
+
+    if (!file) {
+
       return {
         valid: false,
-        message: "Please select a face video."
+        message:
+          "No face video was selected."
       };
     }
 
-    if (!isVideoFile(file)) {
+
+    if (
+      !isVideoFile(file)
+    ) {
+
       return {
         valid: false,
-        message: "Please select a valid video file."
+        message:
+          "Please select a valid video file."
       };
     }
+
+
+    if (
+      !isWithinSizeLimit(file)
+    ) {
+
+      return {
+        valid: false,
+        message:
+          "Face video must be smaller than 500 MB."
+      };
+    }
+
 
     return {
       valid: true,
-      message: ""
+      message:
+        "Face video is valid."
     };
   }
 
-  /* ---------------------------------------------------------
-     Set source
-  --------------------------------------------------------- */
 
-  async function setSource(file) {
-    state.error = "";
-    state.checking = true;
+  /* =======================================================
+     07. READ VIDEO METADATA
+     ======================================================= */
 
-    emit("checking", {
-      file
-    });
+  function readVideoMetadata(
+    file,
+    objectUrl
+  ) {
 
-    const validation = validateFile(file);
+    return new Promise(
+      (resolve, reject) => {
 
-    if (!validation.valid) {
-      state.ready = false;
-      state.checking = false;
-      state.error = validation.message;
+        const video =
+          document.createElement(
+            "video"
+          );
 
-      emit("error", {
-        message: validation.message
-      });
 
-      return {
-        success: false,
-        error: validation.message
-      };
-    }
+        video.preload =
+          "metadata";
 
-    try {
-      revokeObjectUrl();
 
-      const videoInfo = await readVideoMetadata(file);
+        video.muted =
+          true;
 
-      state.sourceFile = file;
-      state.objectUrl = URL.createObjectURL(file);
 
-      state.metadata = {
-        name: file.name || "face-video",
-        type: file.type || "video/*",
-        size: file.size || 0,
-        sizeMB: bytesToMB(file.size || 0),
-        duration: videoInfo.duration,
-        width: videoInfo.width,
-        height: videoInfo.height,
-        aspectRatio: videoInfo.aspectRatio,
-        lastUpdated: new Date().toISOString()
-      };
+        video.playsInline =
+          true;
 
-      state.ready = true;
-      state.error = "";
-      state.checking = false;
 
-      emit("ready", {
-        file,
-        metadata: getMetadata(),
-        previewUrl: state.objectUrl
-      });
+        const cleanup = () => {
 
-      return {
-        success: true,
-        file,
-        metadata: getMetadata(),
-        previewUrl: state.objectUrl
-      };
+          video.removeAttribute(
+            "src"
+          );
 
-    } catch (error) {
-      state.sourceFile = null;
-      state.ready = false;
-      state.checking = false;
-      state.error =
-        error?.message || "Unable to process the face video.";
+          video.load();
+        };
 
-      emit("error", {
-        message: state.error
-      });
 
-      return {
-        success: false,
-        error: state.error
-      };
-    }
+        video.addEventListener(
+          "loadedmetadata",
+          () => {
+
+            const metadata = {
+
+              name:
+                file.name,
+
+              type:
+                file.type ||
+                "video",
+
+              size:
+                file.size,
+
+              duration:
+                Number(
+                  video.duration
+                ) || 0,
+
+              width:
+                Number(
+                  video.videoWidth
+                ) || 0,
+
+              height:
+                Number(
+                  video.videoHeight
+                ) || 0
+            };
+
+
+            cleanup();
+
+            resolve(
+              metadata
+            );
+          },
+          {
+            once: true
+          }
+        );
+
+
+        video.addEventListener(
+          "error",
+          () => {
+
+            cleanup();
+
+            reject(
+              new Error(
+                "The selected video could not be read."
+              )
+            );
+
+          },
+          {
+            once: true
+          }
+        );
+
+
+        video.src =
+          objectUrl;
+      }
+    );
   }
 
-  /* ---------------------------------------------------------
-     Clear source
-  --------------------------------------------------------- */
 
-  function clearSource() {
+  /* =======================================================
+     08. LOAD AVATAR VIDEO
+     ======================================================= */
+
+  async function load(
+    file
+  ) {
+
+    const validation =
+      validateFile(file);
+
+
+    if (
+      !validation.valid
+    ) {
+
+      state.ready =
+        false;
+
+      state.error =
+        validation.message;
+
+      state.status =
+        validation.message;
+
+
+      emit(
+        "error",
+        {
+          message:
+            validation.message
+        }
+      );
+
+
+      throw new Error(
+        validation.message
+      );
+    }
+
+
     revokeObjectUrl();
 
-    state.sourceFile = null;
 
-    state.metadata = {
-      name: "",
-      type: "",
-      size: 0,
-      sizeMB: 0,
-      duration: 0,
-      width: 0,
-      height: 0,
-      aspectRatio: "",
-      lastUpdated: null
-    };
+    resetMetadata();
 
-    state.ready = false;
-    state.error = "";
-    state.checking = false;
 
-    emit("cleared");
+    const objectUrl =
+      URL.createObjectURL(
+        file
+      );
 
-    return true;
+
+    try {
+
+      const metadata =
+        await readVideoMetadata(
+          file,
+          objectUrl
+        );
+
+
+      state.file =
+        file;
+
+
+      state.objectUrl =
+        objectUrl;
+
+
+      state.metadata =
+        metadata;
+
+
+      state.ready =
+        true;
+
+
+      state.error =
+        "";
+
+
+      state.status =
+        "Avatar video ready";
+
+
+      state.updatedAt =
+        new Date().toISOString();
+
+
+      emit(
+        "loaded",
+        {
+          file,
+          metadata
+        }
+      );
+
+
+      emit(
+        "change",
+        getState()
+      );
+
+
+      return getState();
+
+    } catch (error) {
+
+      try {
+
+        URL.revokeObjectURL(
+          objectUrl
+        );
+
+      } catch (_) {}
+
+
+      state.file =
+        null;
+
+
+      state.objectUrl =
+        "";
+
+
+      state.ready =
+        false;
+
+
+      state.error =
+        error?.message ||
+        "Unable to read avatar video.";
+
+
+      state.status =
+        state.error;
+
+
+      emit(
+        "error",
+        {
+          message:
+            state.error
+        }
+      );
+
+
+      throw error;
+    }
   }
 
-  /* ---------------------------------------------------------
-     Getters
-  --------------------------------------------------------- */
 
-  function getSource() {
-    return state.sourceFile;
+  /* =======================================================
+     09. CLEAR AVATAR
+     ======================================================= */
+
+  function clear() {
+
+    revokeObjectUrl();
+
+
+    state.file =
+      null;
+
+
+    state.ready =
+      false;
+
+
+    state.error =
+      "";
+
+
+    state.status =
+      "No avatar video selected";
+
+
+    state.updatedAt =
+      new Date().toISOString();
+
+
+    resetMetadata();
+
+
+    emit(
+      "clear",
+      getState()
+    );
+
+
+    emit(
+      "change",
+      getState()
+    );
   }
+
+
+  /* =======================================================
+     10. GET PREVIEW URL
+     ======================================================= */
 
   function getPreviewUrl() {
-    return state.objectUrl || "";
+
+    return (
+      state.objectUrl ||
+      ""
+    );
   }
 
+
+  /* =======================================================
+     11. GET FILE
+     ======================================================= */
+
+  function getFile() {
+
+    return (
+      state.file ||
+      null
+    );
+  }
+
+
+  /* =======================================================
+     12. GET METADATA
+     ======================================================= */
+
   function getMetadata() {
+
     return {
       ...state.metadata
     };
   }
 
+
+  /* =======================================================
+     13. READINESS
+     ======================================================= */
+
   function isReady() {
-    return Boolean(state.ready && state.sourceFile);
+
+    return Boolean(
+      state.ready &&
+      state.file
+    );
   }
 
-  function getError() {
-    return state.error || "";
-  }
 
-  function isChecking() {
-    return Boolean(state.checking);
-  }
+  function getReadiness() {
 
-  /* ---------------------------------------------------------
-     Provider configuration
-  --------------------------------------------------------- */
+    if (!state.file) {
 
-  function getAIConfig() {
-    return NS.AIConfig || null;
-  }
-
-  function getProvider() {
-    const config = getAIConfig();
-
-    if (!config || typeof config.getProvider !== "function") {
-      return "demo";
-    }
-
-    return config.getProvider();
-  }
-
-  function isDemoMode() {
-    const config = getAIConfig();
-
-    if (!config) return true;
-
-    if (typeof config.isDemoMode === "function") {
-      return config.isDemoMode();
-    }
-
-    return getProvider() === "demo";
-  }
-
-  function isLiveMode() {
-    const config = getAIConfig();
-
-    if (!config) return false;
-
-    if (typeof config.isLiveMode === "function") {
-      return config.isLiveMode();
-    }
-
-    return !isDemoMode();
-  }
-
-  /* ---------------------------------------------------------
-     Provider readiness
-  --------------------------------------------------------- */
-
-  function checkProvider() {
-    const config = getAIConfig();
-
-    if (!config) {
-      return {
-        ready: true,
-        mode: "demo",
-        provider: "demo",
-        message: "Demo avatar engine is available."
-      };
-    }
-
-    const mode =
-      typeof config.getMode === "function"
-        ? config.getMode()
-        : "demo";
-
-    const provider = getProvider();
-
-    if (mode === "demo") {
-      return {
-        ready: true,
-        mode: "demo",
-        provider,
-        message: "Demo avatar engine is ready."
-      };
-    }
-
-    /*
-      IMPORTANT:
-
-      Live provider calls must normally go through your own
-      backend/server. Never expose a private provider API key
-      inside GitHub Pages frontend JavaScript.
-
-      Therefore live mode is considered configured only when
-      the AI configuration layer reports the necessary backend
-      connection.
-    */
-
-    let connectionReady = false;
-
-    if (
-      typeof config.isConfigured === "function"
-    ) {
-      connectionReady = config.isConfigured();
-    }
-
-    if (!connectionReady) {
       return {
         ready: false,
-        mode: "live",
-        provider,
+
+        status:
+          "Face video required",
+
         message:
-          "Live avatar provider is not configured. Connect a secure backend/API."
+          "Upload a personal face video first."
       };
     }
 
-    return {
-      ready: true,
-      mode: "live",
-      provider,
-      message:
-        "Live avatar provider configuration is available."
-    };
-  }
 
-  /* ---------------------------------------------------------
-     Avatar readiness
-  --------------------------------------------------------- */
+    if (!state.ready) {
 
-  function checkReadiness() {
-    const provider = checkProvider();
-
-    if (!isReady()) {
       return {
         ready: false,
-        sourceReady: false,
-        providerReady: provider.ready,
-        mode: provider.mode,
-        provider: provider.provider,
+
+        status:
+          "Preparing avatar",
+
         message:
           state.error ||
-          "Upload a face video before generating an AI mentor video."
+          "Avatar video is being prepared."
       };
     }
 
-    if (!provider.ready) {
-      return {
-        ready: false,
-        sourceReady: true,
-        providerReady: false,
-        mode: provider.mode,
-        provider: provider.provider,
-        message: provider.message
-      };
-    }
 
     return {
       ready: true,
-      sourceReady: true,
-      providerReady: true,
-      mode: provider.mode,
-      provider: provider.provider,
+
+      status:
+        "Avatar ready",
+
       message:
-        provider.mode === "demo"
-          ? "Avatar source is ready for demo generation."
-          : "Avatar source is ready for live generation."
+        "Face video is ready for the AI avatar pipeline."
     };
   }
 
-  /* ---------------------------------------------------------
-     Build provider-safe payload
-  --------------------------------------------------------- */
 
-  function buildPayload(options = {}) {
-    const readiness = checkReadiness();
+  /* =======================================================
+     14. BUILD PROVIDER PAYLOAD
+     ======================================================= */
 
-    if (!readiness.sourceReady) {
-      throw new Error(readiness.message);
-    }
+  function buildPayload(
+    options = {}
+  ) {
 
-    /*
-      We intentionally DO NOT put the File object into JSON.
+    const metadata =
+      getMetadata();
 
-      A real provider may require:
-      - multipart/form-data
-      - cloud storage URL
-      - provider asset ID
-      - signed upload URL
-
-      That upload step belongs in the secure backend layer.
-    */
 
     return {
-      avatar: {
-        fileName: state.metadata.name,
-        mimeType: state.metadata.type,
-        size: state.metadata.size,
-        sizeMB: state.metadata.sizeMB,
-        duration: state.metadata.duration,
-        width: state.metadata.width,
-        height: state.metadata.height,
-        aspectRatio: state.metadata.aspectRatio
-      },
 
-      provider: {
-        name: readiness.provider,
-        mode: readiness.mode
+      type:
+        "personal-avatar",
+
+      source:
+        "face-video",
+
+      sourceFile: {
+
+        name:
+          metadata.name,
+
+        type:
+          metadata.type,
+
+        size:
+          metadata.size,
+
+        duration:
+          metadata.duration,
+
+        width:
+          metadata.width,
+
+        height:
+          metadata.height
       },
 
       options: {
-        ...options
-      },
 
-      client: {
-        application: "SNK AI Mentor",
-        engine: "avatar",
-        version: "1.0.0"
+        avatarName:
+          options.avatarName ||
+          "SNK AI Mentor",
+
+        provider:
+          options.provider ||
+          "demo",
+
+        consentConfirmed:
+          Boolean(
+            options.consentConfirmed
+          )
       }
     };
   }
 
-  /* ---------------------------------------------------------
-     Export local source metadata
-  --------------------------------------------------------- */
 
-  function exportMetadata() {
+  /* =======================================================
+     15. FORM DATA HELPER
+     ======================================================= */
+
+  function appendToFormData(
+    formData,
+    fieldName = "avatarVideo"
+  ) {
+
+    if (
+      !formData ||
+      typeof formData.append !==
+        "function"
+    ) {
+
+      throw new Error(
+        "A valid FormData object is required."
+      );
+    }
+
+
+    if (!state.file) {
+
+      throw new Error(
+        "No avatar video is loaded."
+      );
+    }
+
+
+    formData.append(
+      fieldName,
+      state.file,
+      state.file.name
+    );
+
+
+    formData.append(
+      "avatarType",
+      "personal-avatar"
+    );
+
+
+    return formData;
+  }
+
+
+  /* =======================================================
+     16. PROVIDER SUPPORT
+     ======================================================= */
+
+  function getSupportedProviders() {
+
+    return [
+      {
+        id: "demo",
+        name: "Demo Engine",
+        available: true
+      },
+
+      {
+        id: "custom",
+        name: "Custom API",
+        available: true
+      },
+
+      {
+        id: "heygen",
+        name: "HeyGen",
+        available: true
+      },
+
+      {
+        id: "synthesia",
+        name: "Synthesia",
+        available: true
+      },
+
+      {
+        id: "d-id",
+        name: "D-ID",
+        available: true
+      }
+    ];
+  }
+
+
+  function supportsProvider(
+    provider
+  ) {
+
+    return getSupportedProviders()
+      .some(
+        (item) =>
+          item.id === provider
+      );
+  }
+
+
+  /* =======================================================
+     17. PROVIDER PREPARATION
+     ======================================================= */
+
+  async function prepareForProvider(
+    provider,
+    options = {}
+  ) {
+
+    if (
+      !supportsProvider(provider)
+    ) {
+
+      throw new Error(
+        `Unsupported avatar provider: ${provider}`
+      );
+    }
+
+
+    if (!isReady()) {
+
+      throw new Error(
+        "Avatar video is not ready."
+      );
+    }
+
+
+    const payload =
+      buildPayload({
+        ...options,
+        provider
+      });
+
+
+    /*
+     * Demo provider:
+     * Browser-side preparation is enough.
+     */
+
+    if (
+      provider === "demo"
+    ) {
+
+      return {
+
+        success: true,
+
+        provider,
+
+        mode: "demo",
+
+        payload
+      };
+    }
+
+
+    /*
+     * Live providers:
+     *
+     * We intentionally do not call external
+     * provider APIs directly from this file.
+     *
+     * A secure backend should receive the
+     * FormData/file and communicate with the
+     * provider using server-side credentials.
+     */
+
     return {
-      ready: isReady(),
-      metadata: getMetadata(),
-      provider: getProvider(),
-      mode: isDemoMode() ? "demo" : "live"
+
+      success: true,
+
+      provider,
+
+      mode: "live",
+
+      payload,
+
+      requiresBackend: true
     };
   }
 
-  /* ---------------------------------------------------------
-     Public API
-  --------------------------------------------------------- */
 
-  const Avatar = {
-    version: "1.0.0",
+  /* =======================================================
+     18. STATE SNAPSHOT
+     ======================================================= */
 
-    state,
+  function getState() {
 
-    setSource,
-    clearSource,
+    return {
 
-    getSource,
+      ready:
+        Boolean(
+          state.ready
+        ),
+
+      hasFile:
+        Boolean(
+          state.file
+        ),
+
+      objectUrl:
+        state.objectUrl,
+
+      metadata:
+        {
+          ...state.metadata
+        },
+
+      status:
+        state.status,
+
+      error:
+        state.error,
+
+      updatedAt:
+        state.updatedAt
+    };
+  }
+
+
+  /* =======================================================
+     19. RESET
+     ======================================================= */
+
+  function reset() {
+
+    clear();
+  }
+
+
+  /* =======================================================
+     20. PUBLIC API
+     ======================================================= */
+
+  window.SNKAI.Avatar = {
+
+    /* File */
+
+    load,
+
+    clear,
+
+    reset,
+
+    getFile,
+
     getPreviewUrl,
+
     getMetadata,
 
-    isReady,
-    isChecking,
-    getError,
 
-    getProvider,
-    isDemoMode,
-    isLiveMode,
-
-    checkProvider,
-    checkReadiness,
-
-    buildPayload,
-    exportMetadata,
+    /* Validation */
 
     validateFile,
 
-    on
+    isReady,
+
+    getReadiness,
+
+
+    /* Provider */
+
+    buildPayload,
+
+    appendToFormData,
+
+    prepareForProvider,
+
+    getSupportedProviders,
+
+    supportsProvider,
+
+
+    /* State */
+
+    getState,
+
+
+    /* Events */
+
+    on,
+
+
+    /* Limits */
+
+    MAX_FILE_SIZE,
+
+    ALLOWED_TYPES
   };
 
-  NS.Avatar = Avatar;
 
-  emit("loaded", {
-    version: Avatar.version
-  });
+  /* =======================================================
+     21. READY EVENT
+     ======================================================= */
+
+  emit(
+    "ready",
+    {
+      engine:
+        "avatar"
+    }
+  );
+
+
+  console.log(
+    "SNK AI Mentor: Avatar engine loaded."
+  );
 
 })();
