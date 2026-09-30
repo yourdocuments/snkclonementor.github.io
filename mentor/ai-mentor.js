@@ -1,3422 +1,1265 @@
-/* =========================================================
-   SNK AI MENTOR
-   mentor/ai-mentor.js
-   ---------------------------------------------------------
-   FULL AI ENGINE INTEGRATION
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
 
-   Connected modules:
-   ../ai/ai-config.js
-   ../ai/avatar.js
-   ../ai/voice.js
-   ../ai/video.js
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-   Workflow:
-   Face Video
-        ↓
-   Voice Sample
-        ↓
-   Lesson Script
-        ↓
-   Video Settings
-        ↓
-   Prepare AI Video
-        ↓
-   AI Video Engine
-   ========================================================= */
+  <meta
+    name="description"
+    content="SNK AI Mentor Studio — Create AI-assisted teaching videos using your mentor face, voice and lesson script."
+  >
 
-(() => {
+  <meta name="theme-color" content="#070b14">
 
-  "use strict";
+  <title>AI Mentor Studio | SNK AI Mentor</title>
 
+  <!-- =====================================================
+       GLOBAL CSS
+       ===================================================== -->
+  <link rel="stylesheet" href="../style.css">
 
-  /* =======================================================
-     1. GLOBAL NAMESPACE
-     ======================================================= */
+  <!-- =====================================================
+       MENTOR STUDIO CSS
+       ===================================================== -->
+  <link rel="stylesheet" href="ai-mentor.css">
+</head>
 
-  window.SNKAI = window.SNKAI || {};
+<body class="mentor-studio-page">
 
+  <!-- =====================================================
+       APP BACKGROUND
+       ===================================================== -->
+  <div class="studio-bg" aria-hidden="true">
+    <div class="studio-bg-grid"></div>
+    <div class="studio-bg-glow studio-bg-glow-1"></div>
+    <div class="studio-bg-glow studio-bg-glow-2"></div>
+  </div>
 
-  /* =======================================================
-     2. STORAGE
-     ======================================================= */
 
-  const STORAGE_KEY =
-    "snkAiMentorStudioProject";
+  <!-- =====================================================
+       TOP HEADER
+       ===================================================== -->
+  <header class="studio-header">
 
+    <div class="studio-header-inner">
 
-  const SETTINGS_KEY =
-    "snkAiMentorVideoSettings";
+      <!-- Brand -->
+      <a href="../index.html" class="studio-brand">
 
+        <div class="studio-brand-mark">
+          <span>SNK</span>
+        </div>
 
-  /* =======================================================
-     3. DOM HELPER
-     ======================================================= */
+        <div class="studio-brand-text">
+          <strong>SNK AI Mentor</strong>
+          <small>Mentor Studio</small>
+        </div>
 
-  const $ = (id) =>
-    document.getElementById(id);
+      </a>
 
 
-  /* =======================================================
-     4. STATE
-     ======================================================= */
+      <!-- Project -->
+      <div class="studio-project-top">
 
-  const state = {
+        <span class="project-top-label">
+          CURRENT PROJECT
+        </span>
 
-    initialized: false,
+        <strong id="projectNameTop">
+          Untitled Mentor Project
+        </strong>
 
-    projectName:
-      "My AI Mentor Project",
+      </div>
 
-    faceFile: null,
 
-    voiceFile: null,
-
-    script: "",
-
-    videoSettings: {
-
-      format: "mp4",
-
-      resolution: "1080p",
-
-      mentorPosition: "right",
-
-      background: "studio",
-
-      aspectRatio: "16:9",
-
-      fps: 30,
-
-      subtitles: false,
-
-      audio: true
-
-    },
-
-    lastSavedAt: null,
-
-    videoPrepared: false,
-
-    videoJobId: null,
-
-    videoStatus: "idle",
-
-    videoProgress: 0
-
-  };
-
-
-  /* =======================================================
-     5. TOAST
-     ======================================================= */
-
-  function showToast(
-    message,
-    type = "info"
-  ) {
-
-    const toast =
-      $("mentorToast");
-
-    const text =
-      $("toastMessage");
-
-
-    if (!toast || !text) {
-      return;
-    }
-
-
-    text.textContent =
-      message;
-
-
-    toast.classList.remove(
-      "success",
-      "error",
-      "warning",
-      "show"
-    );
-
-
-    if (
-      ["success", "error", "warning"]
-        .includes(type)
-    ) {
-
-      toast.classList.add(type);
-
-    }
-
-
-    requestAnimationFrame(
-      () => {
-
-        toast.classList.add(
-          "show"
-        );
-
-      }
-    );
-
-
-    clearTimeout(
-      showToast.timer
-    );
-
-
-    showToast.timer =
-      setTimeout(
-        () => {
-
-          toast.classList.remove(
-            "show"
-          );
-
-        },
-        3500
-      );
-
-  }
-
-
-  /* =======================================================
-     6. FORMAT FILE SIZE
-     ======================================================= */
-
-  function formatBytes(
-    bytes
-  ) {
-
-    if (
-      !bytes ||
-      bytes <= 0
-    ) {
-
-      return "0 KB";
-
-    }
-
-
-    const units = [
-
-      "Bytes",
-
-      "KB",
-
-      "MB",
-
-      "GB"
-
-    ];
-
-
-    const index =
-      Math.floor(
-        Math.log(bytes) /
-        Math.log(1024)
-      );
-
-
-    return (
-      (
-        bytes /
-        Math.pow(
-          1024,
-          index
-        )
-      ).toFixed(
-        index === 0
-          ? 0
-          : 1
-      ) +
-      " " +
-      units[
-        Math.min(
-          index,
-          units.length - 1
-        )
-      ]
-    );
-
-  }
-
-
-  /* =======================================================
-     7. FORMAT DATE
-     ======================================================= */
-
-  function formatDate(
-    date
-  ) {
-
-    if (!date) {
-      return "Not saved yet";
-    }
-
-
-    const d =
-      new Date(date);
-
-
-    if (
-      Number.isNaN(
-        d.getTime()
-      )
-    ) {
-
-      return "Not saved yet";
-
-    }
-
-
-    return d.toLocaleString();
-
-  }
-
-
-  /* =======================================================
-     8. WORD COUNT
-     ======================================================= */
-
-  function countWords(
-    text
-  ) {
-
-    if (
-      !text ||
-      !String(text).trim()
-    ) {
-
-      return 0;
-
-    }
-
-
-    return String(text)
-      .trim()
-      .split(/\s+/)
-      .length;
-
-  }
-
-
-  /* =======================================================
-     9. UPDATE SCRIPT COUNTERS
-     ======================================================= */
-
-  function updateScriptCounters() {
-
-    const input =
-      $("lessonScript");
-
-
-    if (!input) {
-      return;
-    }
-
-
-    const text =
-      input.value || "";
-
-
-    const words =
-      countWords(text);
-
-
-    const chars =
-      text.length;
-
-
-    if ($("wordCount")) {
-
-      $("wordCount").textContent =
-        words;
-
-    }
-
-
-    if ($("charCount")) {
-
-      $("charCount").textContent =
-        chars;
-
-    }
-
-  }
-
-
-  /* =======================================================
-     10. SAVE TO LOCAL STORAGE
-     ======================================================= */
-
-  function saveProject(
-    silent = false
-  ) {
-
-    const project =
-      collectProject();
-
-
-    state.lastSavedAt =
-      new Date().toISOString();
-
-
-    project.lastSavedAt =
-      state.lastSavedAt;
-
-
-    try {
-
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(
-          project
-        )
-      );
-
-
-      localStorage.setItem(
-        SETTINGS_KEY,
-        JSON.stringify(
-          state.videoSettings
-        )
-      );
-
-
-      updateSavedTime();
-
-
-      if (!silent) {
-
-        showToast(
-          "Project saved successfully.",
-          "success"
-        );
-
-      }
-
-
-      return true;
-
-    } catch (error) {
-
-      console.error(
-        "[SNK AI Mentor] Save error:",
-        error
-      );
-
-
-      if (!silent) {
-
-        showToast(
-          "Could not save project.",
-          "error"
-        );
-
-      }
-
-
-      return false;
-
-    }
-
-  }
-
-
-  /* =======================================================
-     11. COLLECT PROJECT
-     ======================================================= */
-
-  function collectProject() {
-
-    const projectName =
-      $("projectName")
-        ? $("projectName").value.trim()
-        : state.projectName;
-
-
-    const script =
-      $("lessonScript")
-        ? $("lessonScript").value
-        : state.script;
-
-
-    return {
-
-      version: 2,
-
-      projectName:
-        projectName ||
-        "My AI Mentor Project",
-
-
-      face: state.faceFile
-        ? {
-
-            name:
-              state.faceFile.name,
-
-            type:
-              state.faceFile.type,
-
-            size:
-              state.faceFile.size
-
-          }
-
-        : null,
-
-
-      voice: state.voiceFile
-        ? {
-
-            name:
-              state.voiceFile.name,
-
-            type:
-              state.voiceFile.type,
-
-            size:
-              state.voiceFile.size
-
-          }
-
-        : null,
-
-
-      script: {
-
-        text:
-          script,
-
-        words:
-          countWords(script),
-
-        characters:
-          script.length
-
-      },
-
-
-      videoSettings:
-        {
-          ...state.videoSettings
-        },
-
-
-      lastSavedAt:
-        state.lastSavedAt
-
-    };
-
-  }
-
-
-  /* =======================================================
-     12. RESTORE PROJECT
-     ======================================================= */
-
-  function restoreProject() {
-
-    let saved = null;
-
-
-    try {
-
-      const raw =
-        localStorage.getItem(
-          STORAGE_KEY
-        );
-
-
-      if (raw) {
-
-        saved =
-          JSON.parse(raw);
-
-      }
-
-    } catch (error) {
-
-      console.warn(
-        "[SNK AI Mentor] Restore failed:",
-        error
-      );
-
-    }
-
-
-    if (!saved) {
-
-      restoreSettingsOnly();
-
-      return;
-
-    }
-
-
-    state.projectName =
-      saved.projectName ||
-      "My AI Mentor Project";
-
-
-    state.lastSavedAt =
-      saved.lastSavedAt ||
-      null;
-
-
-    if ($("projectName")) {
-
-      $("projectName").value =
-        state.projectName;
-
-    }
-
-
-    if ($("projectNameTop")) {
-
-      $("projectNameTop").value =
-        state.projectName;
-
-    }
-
-
-    if (
-      $("lessonScript") &&
-      saved.script
-    ) {
-
-      $("lessonScript").value =
-        saved.script.text || "";
-
-    }
-
-
-    if (
-      saved.videoSettings
-    ) {
-
-      state.videoSettings = {
-
-        ...state.videoSettings,
-
-        ...saved.videoSettings
-
-      };
-
-    }
-
-
-    restoreSettingsToUI();
-
-    updateScriptCounters();
-
-    updateSavedTime();
-
-    updateReadiness();
-
-
-    /*
-     * File objects cannot be restored from localStorage.
-     */
-
-    if (
-      saved.face &&
-      !state.faceFile
-    ) {
-
-      showToast(
-        "Saved project found. Please re-select the mentor face video.",
-        "warning"
-      );
-
-    }
-
-
-    if (
-      saved.voice &&
-      !state.voiceFile
-    ) {
-
-      setTimeout(
-        () => {
-
-          showToast(
-            "Please re-select the mentor voice sample.",
-            "warning"
-          );
-
-        },
-        900
-      );
-
-    }
-
-  }
-
-
-  /* =======================================================
-     13. RESTORE SETTINGS ONLY
-     ======================================================= */
-
-  function restoreSettingsOnly() {
-
-    try {
-
-      const raw =
-        localStorage.getItem(
-          SETTINGS_KEY
-        );
-
-
-      if (!raw) {
-        return;
-      }
-
-
-      const settings =
-        JSON.parse(raw);
-
-
-      state.videoSettings = {
-
-        ...state.videoSettings,
-
-        ...settings
-
-      };
-
-
-      restoreSettingsToUI();
-
-    } catch (error) {
-
-      console.warn(
-        "[SNK AI Mentor] Settings restore failed:",
-        error
-      );
-
-    }
-
-  }
-
-
-  /* =======================================================
-     14. RESTORE SETTINGS TO UI
-     ======================================================= */
-
-  function restoreSettingsToUI() {
-
-    setValue(
-      "videoFormat",
-      state.videoSettings.format
-    );
-
-
-    setValue(
-      "videoResolution",
-      state.videoSettings.resolution
-    );
-
-
-    setValue(
-      "mentorPosition",
-      state.videoSettings.mentorPosition
-    );
-
-
-    setValue(
-      "videoBackground",
-      state.videoSettings.background
-    );
-
-  }
-
-
-  /* =======================================================
-     15. SET VALUE
-     ======================================================= */
-
-  function setValue(
-    id,
-    value
-  ) {
-
-    const element =
-      $(id);
-
-
-    if (
-      element &&
-      value !== undefined &&
-      value !== null
-    ) {
-
-      element.value =
-        value;
-
-    }
-
-  }
-
-
-  /* =======================================================
-     16. UPDATE SAVED TIME
-     ======================================================= */
-
-  function updateSavedTime() {
-
-    const element =
-      $("savedTime");
-
-
-    if (!element) {
-      return;
-    }
-
-
-    if (
-      state.lastSavedAt
-    ) {
-
-      element.textContent =
-        "Saved " +
-        formatDate(
-          state.lastSavedAt
-        );
-
-    } else {
-
-      element.textContent =
-        "Not saved yet";
-
-    }
-
-  }
-
-
-  /* =======================================================
-     17. PROJECT NAME SYNC
-     ======================================================= */
-
-  function syncProjectName(
-    source
-  ) {
-
-    const value =
-      source.value.trim() ||
-      "My AI Mentor Project";
-
-
-    state.projectName =
-      value;
-
-
-    if (
-      $("projectName") &&
-      source !== $("projectName")
-    ) {
-
-      $("projectName").value =
-        value;
-
-    }
-
-
-    if (
-      $("projectNameTop") &&
-      source !== $("projectNameTop")
-    ) {
-
-      $("projectNameTop").value =
-        value;
-
-    }
-
-  }
-
-
-  /* =======================================================
-     18. FACE VIDEO UI
-     ======================================================= */
-
-  function handleFaceVideo(
-    file
-  ) {
-
-    if (!file) {
-      return;
-    }
-
-
-    const Avatar =
-      window.SNKAI.Avatar;
-
-
-    if (!Avatar) {
-
-      showToast(
-        "Avatar engine is not loaded.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    const success =
-      Avatar.setSource(
-        file
-      );
-
-
-    if (!success) {
-
-      const avatarState =
-        Avatar.getState();
-
-
-      showToast(
-        avatarState.error ||
-          "Invalid mentor face video.",
-        "error"
-      );
-
-
-      return;
-
-    }
-
-
-    state.faceFile =
-      file;
-
-
-    renderFacePreview();
-
-    updateReadiness();
-
-
-    showToast(
-      "Mentor face video loaded.",
-      "success"
-    );
-
-  }
-
-
-  /* =======================================================
-     19. RENDER FACE PREVIEW
-     ======================================================= */
-
-  function renderFacePreview() {
-
-    const empty =
-      $("faceUploadEmpty");
-
-
-    const wrapper =
-      $("facePreviewWrapper");
-
-
-    const video =
-      $("faceVideoPreview");
-
-
-    if (
-      !state.faceFile ||
-      !video
-    ) {
-
-      if (empty) {
-        empty.hidden = false;
-      }
-
-      if (wrapper) {
-        wrapper.hidden = true;
-      }
-
-      return;
-
-    }
-
-
-    const Avatar =
-      window.SNKAI.Avatar;
-
-
-    const avatarState =
-      Avatar
-        ? Avatar.getState()
-        : null;
-
-
-    if (
-      avatarState &&
-      avatarState.objectUrl
-    ) {
-
-      video.src =
-        avatarState.objectUrl;
-
-    }
-
-
-    if (empty) {
-      empty.hidden = true;
-    }
-
-
-    if (wrapper) {
-      wrapper.hidden = false;
-    }
-
-  }
-
-
-  /* =======================================================
-     20. REMOVE FACE VIDEO
-     ======================================================= */
-
-  function removeFaceVideo() {
-
-    const Avatar =
-      window.SNKAI.Avatar;
-
-
-    if (Avatar) {
-
-      Avatar.clearSource();
-
-    }
-
-
-    state.faceFile =
-      null;
-
-
-    const video =
-      $("faceVideoPreview");
-
-
-    if (video) {
-
-      video.pause();
-
-      video.removeAttribute(
-        "src"
-      );
-
-      video.load();
-
-    }
-
-
-    if ($("facePreviewWrapper")) {
-
-      $("facePreviewWrapper")
-        .hidden = true;
-
-    }
-
-
-    if ($("faceUploadEmpty")) {
-
-      $("faceUploadEmpty")
-        .hidden = false;
-
-    }
-
-
-    updateReadiness();
-
-
-    showToast(
-      "Mentor face video removed.",
-      "info"
-    );
-
-  }
-
-
-  /* =======================================================
-     21. VOICE AUDIO UI
-     ======================================================= */
-
-  function handleVoiceAudio(
-    file
-  ) {
-
-    if (!file) {
-      return;
-    }
-
-
-    const Voice =
-      window.SNKAI.Voice;
-
-
-    if (!Voice) {
-
-      showToast(
-        "Voice engine is not loaded.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    const success =
-      Voice.setSource(
-        file
-      );
-
-
-    if (!success) {
-
-      const voiceState =
-        Voice.getState();
-
-
-      showToast(
-        voiceState.error ||
-          "Invalid voice sample.",
-        "error"
-      );
-
-
-      return;
-
-    }
-
-
-    state.voiceFile =
-      file;
-
-
-    renderVoicePreview();
-
-    updateReadiness();
-
-
-    showToast(
-      "Mentor voice sample loaded.",
-      "success"
-    );
-
-  }
-
-
-  /* =======================================================
-     22. RENDER VOICE PREVIEW
-     ======================================================= */
-
-  function renderVoicePreview() {
-
-    const empty =
-      $("voiceUploadEmpty");
-
-
-    const preview =
-      $("voicePreview");
-
-
-    const player =
-      $("voiceAudioPlayer");
-
-
-    if (
-      !state.voiceFile ||
-      !player
-    ) {
-
-      if (empty) {
-        empty.hidden = false;
-      }
-
-      if (preview) {
-        preview.hidden = true;
-      }
-
-      return;
-
-    }
-
-
-    const Voice =
-      window.SNKAI.Voice;
-
-
-    const voiceState =
-      Voice
-        ? Voice.getState()
-        : null;
-
-
-    if (
-      voiceState &&
-      voiceState.objectUrl
-    ) {
-
-      player.src =
-        voiceState.objectUrl;
-
-    }
-
-
-    if ($("voiceFileName")) {
-
-      $("voiceFileName")
-        .textContent =
-        state.voiceFile.name;
-
-    }
-
-
-    if ($("voiceFileMeta")) {
-
-      $("voiceFileMeta")
-        .textContent =
-        formatBytes(
-          state.voiceFile.size
-        );
-
-    }
-
-
-    if (empty) {
-      empty.hidden = true;
-    }
-
-
-    if (preview) {
-      preview.hidden = false;
-    }
-
-  }
-
-
-  /* =======================================================
-     23. REMOVE VOICE
-     ======================================================= */
-
-  function removeVoice() {
-
-    const Voice =
-      window.SNKAI.Voice;
-
-
-    if (Voice) {
-
-      Voice.clearSource();
-
-    }
-
-
-    state.voiceFile =
-      null;
-
-
-    const player =
-      $("voiceAudioPlayer");
-
-
-    if (player) {
-
-      player.pause();
-
-      player.removeAttribute(
-        "src"
-      );
-
-      player.load();
-
-    }
-
-
-    if ($("voicePreview")) {
-
-      $("voicePreview")
-        .hidden = true;
-
-    }
-
-
-    if ($("voiceUploadEmpty")) {
-
-      $("voiceUploadEmpty")
-        .hidden = false;
-
-    }
-
-
-    updateReadiness();
-
-
-    showToast(
-      "Mentor voice sample removed.",
-      "info"
-    );
-
-  }
-
-
-  /* =======================================================
-     24. SCRIPT INPUT
-     ======================================================= */
-
-  function handleScriptInput() {
-
-    const input =
-      $("lessonScript");
-
-
-    if (!input) {
-      return;
-    }
-
-
-    state.script =
-      input.value;
-
-
-    updateScriptCounters();
-
-    updateReadiness();
-
-  }
-
-
-  /* =======================================================
-     25. CLEAR SCRIPT
-     ======================================================= */
-
-  function clearScript() {
-
-    const input =
-      $("lessonScript");
-
-
-    if (!input) {
-      return;
-    }
-
-
-    if (
-      input.value.trim()
-    ) {
-
-      const confirmed =
-        window.confirm(
-          "Clear the entire lesson script?"
-        );
-
-
-      if (!confirmed) {
-        return;
-      }
-
-    }
-
-
-    input.value =
-      "";
-
-
-    state.script =
-      "";
-
-
-    updateScriptCounters();
-
-    updateReadiness();
-
-
-    showToast(
-      "Lesson script cleared.",
-      "info"
-    );
-
-  }
-
-
-  /* =======================================================
-     26. VIDEO SETTINGS
-     ======================================================= */
-
-  function handleVideoSettings() {
-
-    state.videoSettings = {
-
-      ...state.videoSettings,
-
-      format:
-        getValue(
-          "videoFormat",
-          state.videoSettings.format
-        ),
-
-      resolution:
-        getValue(
-          "videoResolution",
-          state.videoSettings.resolution
-        ),
-
-      mentorPosition:
-        getValue(
-          "mentorPosition",
-          state.videoSettings.mentorPosition
-        ),
-
-      background:
-        getValue(
-          "videoBackground",
-          state.videoSettings.background
-        )
-
-    };
-
-
-    /*
-     * Sync with Video engine.
-     */
-
-    const Video =
-      window.SNKAI.Video;
-
-
-    if (Video) {
-
-      Video.setSettings({
-
-        format:
-          state.videoSettings.format,
-
-        resolution:
-          state.videoSettings.resolution,
-
-        mentorPosition:
-          state.videoSettings
-            .mentorPosition,
-
-        background:
-          state.videoSettings
-            .background,
-
-        aspectRatio:
-          state.videoSettings
-            .aspectRatio,
-
-        fps:
-          state.videoSettings
-            .fps,
-
-        subtitles:
-          state.videoSettings
-            .subtitles,
-
-        audio:
-          state.videoSettings
-            .audio
-
-      });
-
-    }
-
-
-    saveProject(
-      true
-    );
-
-
-    updateReadiness();
-
-  }
-
-
-  /* =======================================================
-     27. GET VALUE
-     ======================================================= */
-
-  function getValue(
-    id,
-    fallback
-  ) {
-
-    const element =
-      $(id);
-
-
-    return element
-      ? element.value
-      : fallback;
-
-  }
-
-
-  /* =======================================================
-     28. READINESS
-     ======================================================= */
-
-  function updateReadiness() {
-
-    const faceReady =
-      Boolean(
-        state.faceFile
-      );
-
-
-    const voiceReady =
-      Boolean(
-        state.voiceFile
-      );
-
-
-    const scriptReady =
-      Boolean(
-        (
-          $("lessonScript")
-            ? $("lessonScript").value
-            : state.script
-        ).trim()
-      );
-
-
-    const settingsReady =
-      Boolean(
-        state.videoSettings.format &&
-        state.videoSettings.resolution
-      );
-
-
-    const checks = [
-
-      faceReady,
-
-      voiceReady,
-
-      scriptReady,
-
-      settingsReady
-
-    ];
-
-
-    const completed =
-      checks.filter(Boolean)
-        .length;
-
-
-    const percent =
-      Math.round(
-        (
-          completed /
-          checks.length
-        ) * 100
-      );
-
-
-    setText(
-      "readinessPercent",
-      percent + "%"
-    );
-
-
-    const progress =
-      $("readinessProgress");
-
-
-    if (progress) {
-
-      progress.style.width =
-        percent + "%";
-
-    }
-
-
-    setCheck(
-      "checkFace",
-      faceReady
-    );
-
-
-    setCheck(
-      "checkVoice",
-      voiceReady
-    );
-
-
-    setCheck(
-      "checkScript",
-      scriptReady
-    );
-
-
-    setCheck(
-      "checkSettings",
-      settingsReady
-    );
-
-
-    setText(
-      "studioStatus",
-      percent === 100
-        ? "Ready"
-        : "Setup Required"
-    );
-
-
-    if (
-      percent === 100
-    ) {
-
-      state.videoPrepared =
-        false;
-
-    }
-
-
-    return percent;
-
-  }
-
-
-  /* =======================================================
-     29. SET CHECK STATE
-     ======================================================= */
-
-  function setCheck(
-    id,
-    completed
-  ) {
-
-    const element =
-      $(id);
-
-
-    if (!element) {
-      return;
-    }
-
-
-    element.classList.toggle(
-      "complete",
-      Boolean(completed)
-    );
-
-
-    element.classList.toggle(
-      "pending",
-      !completed
-    );
-
-
-    const icon =
-      element.querySelector(
-        "[data-check-icon]"
-      );
-
-
-    if (icon) {
-
-      icon.textContent =
-        completed
-          ? "✓"
-          : "○";
-
-    }
-
-  }
-
-
-  /* =======================================================
-     30. SET TEXT
-     ======================================================= */
-
-  function setText(
-    id,
-    value
-  ) {
-
-    const element =
-      $(id);
-
-
-    if (element) {
-
-      element.textContent =
-        value;
-
-    }
-
-  }
-
-
-  /* =======================================================
-     31. PREPARE AI VIDEO
-     ======================================================= */
-
-  async function prepareAIVideo() {
-
-    const percent =
-      updateReadiness();
-
-
-    if (
-      percent < 100
-    ) {
-
-      showToast(
-        "Complete Face, Voice, Script and Video Settings first.",
-        "warning"
-      );
-
-
-      scrollToFirstMissing();
-
-
-      return;
-
-    }
-
-
-    const Avatar =
-      window.SNKAI.Avatar;
-
-
-    const Voice =
-      window.SNKAI.Voice;
-
-
-    const Video =
-      window.SNKAI.Video;
-
-
-    if (
-      !Avatar ||
-      !Voice ||
-      !Video
-    ) {
-
-      showToast(
-        "AI engine files are not loaded.",
-        "error"
-      );
-
-
-      return;
-
-    }
-
-
-    /*
-     * Make sure Video engine has the latest script.
-     */
-
-    Video.setScript(
-      $("lessonScript")
-        ? $("lessonScript").value
-        : state.script
-    );
-
-
-    Video.setSettings(
-      state.videoSettings
-    );
-
-
-    /*
-     * Provider status.
-     */
-
-    const provider =
-      window.SNKAI.AIConfig
-        ? window.SNKAI.AIConfig.getProvider()
-        : null;
-
-
-    const config =
-      window.SNKAI.AIConfig
-        ? window.SNKAI.AIConfig.getConfig()
-        : null;
-
-
-    const mode =
-      config
-        ? config.mode
-        : "demo";
-
-
-    const providerName =
-      provider
-        ? provider.label
-        : "AI Provider";
-
-
-    /*
-     * Show preparation modal.
-     */
-
-    const modal =
-      createPreparationModal(
-        providerName,
-        mode
-      );
-
-
-    try {
-
-      updatePreparationModal(
-        modal,
-        "Checking mentor face...",
-        15
-      );
-
-
-      /*
-       * Avatar validation
-       */
-
-      const avatarCheck =
-        Avatar.checkProvider();
-
-
-      if (
-        !avatarCheck.available &&
-        mode !== "demo"
-      ) {
-
-        throw new Error(
-          avatarCheck.message
-        );
-
-      }
-
-
-      updatePreparationModal(
-        modal,
-        "Checking mentor voice...",
-        30
-      );
-
-
-      /*
-       * Voice validation
-       */
-
-      const voiceCheck =
-        Voice.checkProvider();
-
-
-      if (
-        !voiceCheck.available &&
-        mode !== "demo"
-      ) {
-
-        throw new Error(
-          voiceCheck.message
-        );
-
-      }
-
-
-      updatePreparationModal(
-        modal,
-        "Preparing lesson script...",
-        45
-      );
-
-
-      const script =
-        $("lessonScript")
-          ? $("lessonScript").value
-          : state.script;
-
-
-      Video.setScript(
-        script
-      );
-
-
-      updatePreparationModal(
-        modal,
-        "Preparing AI video job...",
-        60
-      );
-
-
-      state.videoPrepared =
-        true;
-
-
-      state.videoStatus =
-        "preparing";
-
-
-      /*
-       * Start actual Video engine.
-       */
-
-      const result =
-        await Video.generate({
-
-          mentorName:
-            state.projectName,
-
-          video:
-            state.videoSettings
-
-        });
-
-
-      state.videoJobId =
-        result.jobId ||
-        null;
-
-
-      state.videoProgress =
-        100;
-
-
-      state.videoStatus =
-        result.success
-          ? "completed"
-          : "error";
-
-
-      if (
-        result.success
-      ) {
-
-        updatePreparationModal(
-          modal,
-          result.demo
-            ? "Demo video workflow completed."
-            : "AI video generation completed.",
-          100
-        );
-
-
-        setTimeout(
-          () => {
-
-            closePreparationModal(
-              modal
-            );
-
-
-            if (
-              result.videoUrl
-            ) {
-
-              showVideoResult(
-                result.videoUrl
-              );
-
-            } else {
-
-              showToast(
-                result.demo
-                  ? "Demo job completed. Real AI provider is ready to be connected."
-                  : "AI video job completed.",
-                "success"
-              );
-
-            }
-
-          },
-          900
-        );
-
-      }
-
-    } catch (error) {
-
-      console.error(
-        "[SNK AI Mentor] AI video error:",
-        error
-      );
-
-
-      state.videoStatus =
-        "error";
-
-
-      state.videoPrepared =
-        false;
-
-
-      updatePreparationModal(
-        modal,
-        error.message ||
-          "AI video preparation failed.",
-        100,
-        true
-      );
-
-
-      showToast(
-        error.message ||
-          "AI video preparation failed.",
-        "error"
-      );
-
-    }
-
-  }
-
-
-  /* =======================================================
-     32. SCROLL TO FIRST MISSING
-     ======================================================= */
-
-  function scrollToFirstMissing() {
-
-    const ids = [
-
-      [
-        "checkFace",
-        "faceUploadArea"
-      ],
-
-      [
-        "checkVoice",
-        "voiceUploadArea"
-      ],
-
-      [
-        "checkScript",
-        "lessonScript"
-      ],
-
-      [
-        "checkSettings",
-        "videoFormat"
-      ]
-
-    ];
-
-
-    for (
-      const [checkId, targetId]
-      of ids
-    ) {
-
-      const check =
-        $(checkId);
-
-
-      if (
-        check &&
-        !check.classList.contains(
-          "complete"
-        )
-      ) {
-
-        const target =
-          $(targetId);
-
-
-        if (target) {
-
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
-
-        }
-
-
-        return;
-
-      }
-
-    }
-
-  }
-
-
-  /* =======================================================
-     33. PREPARATION MODAL
-     ======================================================= */
-
-  function createPreparationModal(
-    providerName,
-    mode
-  ) {
-
-    const backdrop =
-      document.createElement(
-        "div"
-      );
-
-
-    backdrop.className =
-      "ai-preparation-backdrop";
-
-
-    const modal =
-      document.createElement(
-        "div"
-      );
-
-
-    modal.className =
-      "ai-preparation-modal";
-
-
-    modal.innerHTML = `
-
-      <div class="ai-preparation-box">
+      <!-- Header Actions -->
+      <div class="studio-header-actions">
 
         <button
           type="button"
-          class="ai-preparation-close"
-          aria-label="Close"
+          class="studio-header-btn"
+          id="sidebarSaveBtn"
         >
-          ×
+          <span>💾</span>
+          <span>Save</span>
         </button>
 
-        <div class="ai-preparation-icon">
-          ✦
+        <button
+          type="button"
+          class="studio-header-btn"
+          id="exportProjectBtn"
+        >
+          <span>↗</span>
+          <span>Export</span>
+        </button>
+
+        <a
+          href="../index.html"
+          class="studio-header-btn studio-home-btn"
+        >
+          <span>←</span>
+          <span>Home</span>
+        </a>
+
+      </div>
+
+    </div>
+
+  </header>
+
+
+
+  <!-- =====================================================
+       MAIN APP
+       ===================================================== -->
+  <main class="studio-main">
+
+    <!-- ===================================================
+         PAGE HERO
+         =================================================== -->
+    <section class="studio-page-hero">
+
+      <div class="studio-hero-copy">
+
+        <div class="studio-eyebrow">
+          <span class="eyebrow-dot"></span>
+          AI TEACHING WORKSPACE
         </div>
 
-        <div class="ai-preparation-kicker">
-          SNK AI MENTOR
-        </div>
+        <h1>
+          Build your
+          <span>AI Mentor</span>
+          video.
+        </h1>
 
-        <h3>
-          Preparing AI Video
-        </h3>
-
-        <p class="ai-preparation-provider">
-          ${escapeHtml(providerName)}
-          ·
-          ${escapeHtml(
-            mode === "demo"
-              ? "Demo Mode"
-              : "Live Mode"
-          )}
+        <p>
+          Add your face video, voice sample and lesson script.
+          Prepare everything in one professional workspace.
         </p>
 
-        <div class="ai-preparation-progress">
-          <span></span>
-        </div>
+      </div>
 
-        <div class="ai-preparation-percent">
-          0%
-        </div>
 
-        <p class="ai-preparation-status">
-          Starting...
-        </p>
+      <div class="studio-hero-status">
 
-        <ul class="ai-preparation-list">
+        <div class="live-status-dot"></div>
 
-          <li data-step="face">
-            <span>○</span>
-            Mentor Face
-          </li>
-
-          <li data-step="voice">
-            <span>○</span>
-            Mentor Voice
-          </li>
-
-          <li data-step="script">
-            <span>○</span>
-            Lesson Script
-          </li>
-
-          <li data-step="video">
-            <span>○</span>
-            Video Job
-          </li>
-
-        </ul>
-
-        <div class="ai-preparation-actions">
-
-          <button
-            type="button"
-            class="ai-modal-secondary"
-          >
-            Close
-          </button>
-
+        <div>
+          <small>STUDIO STATUS</small>
+          <strong id="studioStatus">
+            Ready
+          </strong>
         </div>
 
       </div>
 
-    `;
+    </section>
 
 
-    backdrop.appendChild(
-      modal
-    );
 
+    <!-- ===================================================
+         WORKFLOW STEPS
+         =================================================== -->
+    <section class="workflow-strip">
 
-    document.body.appendChild(
-      backdrop
-    );
+      <div class="workflow-step active">
+        <span class="workflow-number">01</span>
+        <div>
+          <strong>Mentor Face</strong>
+          <small>Upload face video</small>
+        </div>
+      </div>
 
+      <div class="workflow-line"></div>
 
-    const closeButtons =
-      modal.querySelectorAll(
-        ".ai-preparation-close, .ai-modal-secondary"
-      );
+      <div class="workflow-step">
+        <span class="workflow-number">02</span>
+        <div>
+          <strong>Voice</strong>
+          <small>Add voice sample</small>
+        </div>
+      </div>
 
+      <div class="workflow-line"></div>
 
-    closeButtons.forEach(
-      button => {
+      <div class="workflow-step">
+        <span class="workflow-number">03</span>
+        <div>
+          <strong>Lesson</strong>
+          <small>Write your script</small>
+        </div>
+      </div>
 
-        button.addEventListener(
-          "click",
-          () => {
+      <div class="workflow-line"></div>
 
-            closePreparationModal(
-              backdrop
-            );
+      <div class="workflow-step">
+        <span class="workflow-number">04</span>
+        <div>
+          <strong>Generate</strong>
+          <small>Create AI video</small>
+        </div>
+      </div>
 
-          }
-        );
+    </section>
 
-      }
-    );
 
 
-    requestAnimationFrame(
-      () => {
+    <!-- ===================================================
+         STUDIO LAYOUT
+         =================================================== -->
+    <section class="studio-layout">
 
-        backdrop.classList.add(
-          "show"
-        );
+      <!-- =================================================
+           LEFT / MAIN WORKSPACE
+           ================================================= -->
+      <div class="studio-workspace">
 
-      }
-    );
 
+        <!-- ===============================================
+             PROJECT NAME
+             =============================================== -->
+        <section class="studio-card project-card">
 
-    return backdrop;
+          <div class="card-heading">
 
-  }
+            <div class="card-heading-icon">
+              ✦
+            </div>
 
+            <div>
+              <span class="card-kicker">
+                PROJECT
+              </span>
 
-  /* =======================================================
-     34. UPDATE PREPARATION MODAL
-     ======================================================= */
+              <h2>
+                Mentor Project
+              </h2>
+            </div>
 
-  function updatePreparationModal(
-    backdrop,
-    message,
-    progress,
-    error = false
-  ) {
+          </div>
 
-    if (!backdrop) {
-      return;
-    }
 
+          <div class="field-group">
 
-    const bar =
-      backdrop.querySelector(
-        ".ai-preparation-progress span"
-      );
+            <label for="projectName">
+              Project Name
+            </label>
 
+            <input
+              type="text"
+              id="projectName"
+              placeholder="Example: Digital Marketing Masterclass"
+              autocomplete="off"
+            >
 
-    const percent =
-      backdrop.querySelector(
-        ".ai-preparation-percent"
-      );
+          </div>
 
+        </section>
 
-    const status =
-      backdrop.querySelector(
-        ".ai-preparation-status"
-      );
 
 
-    if (bar) {
+        <!-- ===============================================
+             FACE VIDEO
+             =============================================== -->
+        <section class="studio-card">
 
-      bar.style.width =
-        Math.max(
-          0,
-          Math.min(
-            100,
-            progress
-          )
-        ) + "%";
+          <div class="card-heading">
 
-    }
+            <div class="card-heading-icon">
+              👤
+            </div>
 
+            <div>
+              <span class="card-kicker">
+                STEP 01
+              </span>
 
-    if (percent) {
+              <h2>
+                Mentor Face Video
+              </h2>
 
-      percent.textContent =
-        Math.round(progress) +
-        "%";
+              <p>
+                Upload a clear video of yourself for the AI mentor.
+              </p>
+            </div>
 
-    }
+          </div>
 
 
-    if (status) {
+          <!-- Upload Area -->
+          <div
+            class="upload-area face-upload-area"
+            id="faceUploadArea"
+          >
 
-      status.textContent =
-        message;
+            <!-- Empty -->
+            <div
+              class="upload-empty"
+              id="faceUploadEmpty"
+            >
 
+              <div class="upload-icon">
+                🎥
+              </div>
 
-      status.classList.toggle(
-        "error",
-        Boolean(error)
-      );
+              <h3>
+                Upload Mentor Video
+              </h3>
 
-    }
+              <p>
+                MP4, WebM or MOV
+              </p>
 
+              <span class="upload-hint">
+                Use a clear front-facing recording
+              </span>
 
-    /*
-     * Update workflow items.
-     */
+              <button
+                type="button"
+                class="primary-btn"
+                id="selectFaceVideoBtn"
+              >
+                Select Video
+              </button>
 
-    const steps = [
+            </div>
 
-      [
-        "face",
-        25
-      ],
 
-      [
-        "voice",
-        50
-      ],
+            <!-- Preview -->
+            <div
+              class="face-preview-wrapper"
+              id="facePreviewWrapper"
+              hidden
+            >
 
-      [
-        "script",
-        60
-      ],
+              <video
+                id="faceVideoPreview"
+                class="face-video-preview"
+                controls
+                playsinline
+                preload="metadata"
+              ></video>
 
-      [
-        "video",
-        100
-      ]
+              <div class="preview-actions">
 
-    ];
+                <button
+                  type="button"
+                  class="secondary-btn"
+                  id="changeFaceVideoBtn"
+                >
+                  Change Video
+                </button>
 
+              </div>
 
-    steps.forEach(
-      ([name, threshold]) => {
+            </div>
 
-        const item =
-          backdrop.querySelector(
-            `[data-step="${name}"]`
-          );
+          </div>
 
 
-        if (!item) {
-          return;
-        }
+          <input
+            type="file"
+            id="faceVideoInput"
+            accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+            hidden
+          >
 
+        </section>
 
-        const icon =
-          item.querySelector(
-            "span"
-          );
 
 
-        const complete =
-          progress >= threshold &&
-          !error;
+        <!-- ===============================================
+             VOICE SAMPLE
+             =============================================== -->
+        <section class="studio-card">
 
+          <div class="card-heading">
 
-        item.classList.toggle(
-          "complete",
-          complete
-        );
+            <div class="card-heading-icon">
+              🎙️
+            </div>
 
+            <div>
+              <span class="card-kicker">
+                STEP 02
+              </span>
 
-        if (icon) {
+              <h2>
+                Mentor Voice
+              </h2>
 
-          icon.textContent =
-            complete
-              ? "✓"
-              : "○";
+              <p>
+                Upload your voice sample for AI voice generation.
+              </p>
+            </div>
 
-        }
+          </div>
 
-      }
-    );
 
-  }
+          <div
+            class="upload-area voice-upload-area"
+            id="voiceUploadArea"
+          >
 
+            <!-- Empty -->
+            <div
+              class="upload-empty"
+              id="voiceUploadEmpty"
+            >
 
-  /* =======================================================
-     35. CLOSE MODAL
-     ======================================================= */
+              <div class="upload-icon">
+                🎧
+              </div>
 
-  function closePreparationModal(
-    backdrop
-  ) {
+              <h3>
+                Upload Voice Sample
+              </h3>
 
-    if (!backdrop) {
-      return;
-    }
+              <p>
+                MP3, WAV, M4A or OGG
+              </p>
 
+              <span class="upload-hint">
+                A clean voice recording works best
+              </span>
 
-    backdrop.classList.remove(
-      "show"
-    );
+              <button
+                type="button"
+                class="primary-btn"
+                id="selectVoiceBtn"
+              >
+                Select Voice
+              </button>
 
+            </div>
 
-    setTimeout(
-      () => {
 
-        backdrop.remove();
+            <!-- Voice Preview -->
+            <div
+              class="voice-preview"
+              id="voicePreview"
+              hidden
+            >
 
-      },
-      250
-    );
+              <div class="voice-file-icon">
+                🎵
+              </div>
 
-  }
+              <div class="voice-file-info">
 
+                <strong id="voiceFileName">
+                  Voice Sample
+                </strong>
 
-  /* =======================================================
-     36. VIDEO RESULT
-     ======================================================= */
+                <span id="voiceFileMeta">
+                  Audio file
+                </span>
 
-  function showVideoResult(
-    videoUrl
-  ) {
+              </div>
 
-    if (!videoUrl) {
-      return;
-    }
+              <audio
+                id="voiceAudioPlayer"
+                controls
+              ></audio>
 
+              <button
+                type="button"
+                class="danger-btn"
+                id="removeVoiceBtn"
+              >
+                Remove
+              </button>
 
-    const modal =
-      document.createElement(
-        "div"
-      );
+            </div>
 
+          </div>
 
-    modal.className =
-      "ai-preparation-backdrop show";
 
+          <input
+            type="file"
+            id="voiceInput"
+            accept="audio/*,.mp3,.wav,.m4a,.ogg"
+            hidden
+          >
 
-    modal.innerHTML = `
+        </section>
 
-      <div class="ai-preparation-modal">
 
-        <div class="ai-preparation-box">
 
+        <!-- ===============================================
+             LESSON SCRIPT
+             =============================================== -->
+        <section class="studio-card script-card">
+
+          <div class="card-heading">
+
+            <div class="card-heading-icon">
+              📝
+            </div>
+
+            <div>
+              <span class="card-kicker">
+                STEP 03
+              </span>
+
+              <h2>
+                Lesson Script
+              </h2>
+
+              <p>
+                Write what your AI mentor should teach.
+              </p>
+            </div>
+
+          </div>
+
+
+          <!-- Script Settings -->
+          <div class="script-toolbar">
+
+            <div class="field-group">
+
+              <label for="scriptLanguage">
+                Language
+              </label>
+
+              <select id="scriptLanguage">
+
+                <option value="bn">
+                  বাংলা
+                </option>
+
+                <option value="en">
+                  English
+                </option>
+
+                <option value="bn-en">
+                  বাংলা + English
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="field-group">
+
+              <label for="scriptStyle">
+                Teaching Style
+              </label>
+
+              <select id="scriptStyle">
+
+                <option value="professional">
+                  Professional
+                </option>
+
+                <option value="friendly">
+                  Friendly
+                </option>
+
+                <option value="energetic">
+                  Energetic
+                </option>
+
+                <option value="calm">
+                  Calm
+                </option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+
+          <!-- Textarea -->
+          <div class="script-editor">
+
+            <textarea
+              id="lessonScript"
+              placeholder="Write your lesson here...
+
+Example:
+
+আজকের ক্লাসে আমরা Digital Marketing সম্পর্কে জানব।
+
+প্রথমে আমরা জানব Digital Marketing কী।
+তারপর Facebook Ads কীভাবে কাজ করে সেটা দেখব।
+
+Let's begin today's lesson..."
+              spellcheck="true"
+            ></textarea>
+
+            <div class="script-editor-footer">
+
+              <div class="script-counts">
+
+                <span>
+                  <strong id="wordCount">0</strong>
+                  words
+                </span>
+
+                <span>
+                  <strong id="charCount">0</strong>
+                  characters
+                </span>
+
+              </div>
+
+              <div
+                class="autosave-status"
+                id="autosaveStatus"
+              >
+                ● Auto-save ready
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="script-actions">
+
+            <button
+              type="button"
+              class="secondary-btn"
+              id="clearScriptBtn"
+            >
+              Clear Script
+            </button>
+
+          </div>
+
+        </section>
+
+
+
+        <!-- ===============================================
+             VIDEO SETTINGS
+             =============================================== -->
+        <section class="studio-card">
+
+          <div class="card-heading">
+
+            <div class="card-heading-icon">
+              🎬
+            </div>
+
+            <div>
+              <span class="card-kicker">
+                STEP 04
+              </span>
+
+              <h2>
+                Video Settings
+              </h2>
+
+              <p>
+                Configure your AI teaching video output.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="settings-grid">
+
+            <!-- Format -->
+            <div class="field-group">
+
+              <label for="videoFormat">
+                Format
+              </label>
+
+              <select id="videoFormat">
+
+                <option value="mp4">
+                  MP4
+                </option>
+
+                <option value="webm">
+                  WebM
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <!-- Resolution -->
+            <div class="field-group">
+
+              <label for="videoResolution">
+                Resolution
+              </label>
+
+              <select id="videoResolution">
+
+                <option value="1080p">
+                  1920 × 1080 — Full HD
+                </option>
+
+                <option value="720p">
+                  1280 × 720 — HD
+                </option>
+
+                <option value="4k">
+                  3840 × 2160 — 4K
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <!-- Mentor Position -->
+            <div class="field-group">
+
+              <label for="mentorPosition">
+                Mentor Position
+              </label>
+
+              <select id="mentorPosition">
+
+                <option value="right">
+                  Right
+                </option>
+
+                <option value="left">
+                  Left
+                </option>
+
+                <option value="center">
+                  Center
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <!-- Background -->
+            <div class="field-group">
+
+              <label for="videoBackground">
+                Background
+              </label>
+
+              <select id="videoBackground">
+
+                <option value="studio">
+                  AI Studio
+                </option>
+
+                <option value="classroom">
+                  Classroom
+                </option>
+
+                <option value="office">
+                  Office
+                </option>
+
+                <option value="transparent">
+                  Transparent
+                </option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+
+        <!-- ===============================================
+             AI VIDEO OUTPUT
+             =============================================== -->
+        <section
+          class="studio-card ai-video-output-card"
+          id="videoOutputCard"
+        >
+
+          <div class="card-heading">
+
+            <div class="card-heading-icon">
+              ✨
+            </div>
+
+            <div>
+
+              <span class="card-kicker">
+                AI VIDEO OUTPUT
+              </span>
+
+              <h2>
+                Generated Teaching Video
+              </h2>
+
+              <p>
+                Your generated AI mentor video will appear here.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <!-- Empty Output -->
+          <div
+            class="video-output-empty"
+            id="videoOutputEmpty"
+          >
+
+            <div class="output-empty-icon">
+              ▶
+            </div>
+
+            <h3>
+              No video generated yet
+            </h3>
+
+            <p>
+              Complete the mentor face, voice and lesson script,
+              then prepare your AI video.
+            </p>
+
+          </div>
+
+
+          <!-- Generated Video -->
+          <div
+            class="video-output-player"
+            id="videoOutputPlayer"
+            hidden
+          >
+
+            <div class="generated-video-frame">
+
+              <video
+                id="generatedVideo"
+                controls
+                playsinline
+                preload="metadata"
+              ></video>
+
+            </div>
+
+
+            <div class="generated-video-actions">
+
+              <a
+                href="#"
+                class="primary-btn"
+                id="downloadGeneratedVideo"
+                download
+              >
+                Download MP4
+              </a>
+
+              <button
+                type="button"
+                class="secondary-btn"
+                id="openGeneratedVideo"
+              >
+                Open Video
+              </button>
+
+            </div>
+
+          </div>
+
+        </section>
+
+      </div>
+
+
+
+      <!-- =================================================
+           RIGHT SIDEBAR
+           ================================================= -->
+      <aside class="studio-sidebar">
+
+
+        <!-- ===============================================
+             READINESS
+             =============================================== -->
+        <section class="sidebar-card readiness-card">
+
+          <div class="sidebar-card-heading">
+
+            <div>
+
+              <span class="sidebar-kicker">
+                PROJECT READINESS
+              </span>
+
+              <h3>
+                Ready to Generate
+              </h3>
+
+            </div>
+
+            <strong id="readinessPercent">
+              0%
+            </strong>
+
+          </div>
+
+
+          <div class="readiness-progress">
+
+            <div
+              class="readiness-progress-bar"
+              id="readinessProgress"
+              style="width:0%"
+            ></div>
+
+          </div>
+
+
+          <div class="readiness-checklist">
+
+            <!-- Face -->
+            <div
+              class="readiness-item"
+              id="checkFace"
+            >
+
+              <span class="check-icon">
+                ○
+              </span>
+
+              <div>
+                <strong>
+                  Mentor Face
+                </strong>
+
+                <small>
+                  Upload face video
+                </small>
+              </div>
+
+            </div>
+
+
+            <!-- Voice -->
+            <div
+              class="readiness-item"
+              id="checkVoice"
+            >
+
+              <span class="check-icon">
+                ○
+              </span>
+
+              <div>
+                <strong>
+                  Mentor Voice
+                </strong>
+
+                <small>
+                  Upload voice sample
+                </small>
+              </div>
+
+            </div>
+
+
+            <!-- Script -->
+            <div
+              class="readiness-item"
+              id="checkScript"
+            >
+
+              <span class="check-icon">
+                ○
+              </span>
+
+              <div>
+                <strong>
+                  Lesson Script
+                </strong>
+
+                <small>
+                  Add teaching content
+                </small>
+              </div>
+
+            </div>
+
+
+            <!-- Settings -->
+            <div
+              class="readiness-item"
+              id="checkSettings"
+            >
+
+              <span class="check-icon">
+                ○
+              </span>
+
+              <div>
+                <strong>
+                  Video Settings
+                </strong>
+
+                <small>
+                  Output configuration
+                </small>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- Prepare -->
           <button
             type="button"
-            class="ai-preparation-close"
-            aria-label="Close"
+            class="prepare-video-btn"
+            id="prepareVideoBtn"
           >
-            ×
+
+            <span class="prepare-icon">
+              ✨
+            </span>
+
+            <span>
+              Prepare AI Video
+            </span>
+
+            <span class="prepare-arrow">
+              →
+            </span>
+
           </button>
 
-          <div class="ai-preparation-icon">
-            ✓
-          </div>
+        </section>
 
-          <div class="ai-preparation-kicker">
-            GENERATION COMPLETE
-          </div>
+
+
+        <!-- ===============================================
+             SAVE PROJECT
+             =============================================== -->
+        <section class="sidebar-card">
+
+          <span class="sidebar-kicker">
+            PROJECT
+          </span>
 
           <h3>
-            Your AI Video Is Ready
+            Save your work
           </h3>
 
-          <div class="ai-video-result">
+          <p>
+            Your project data is automatically saved in this
+            browser while you work.
+          </p>
 
-            <video
-              controls
-              playsinline
-              preload="metadata"
-              src="${escapeHtml(videoUrl)}"
-            ></video>
 
-          </div>
+          <button
+            type="button"
+            class="sidebar-action-btn"
+            id="saveProjectBtn"
+          >
+            <span>💾</span>
+            Save Project
+          </button>
 
-          <div class="ai-preparation-actions">
 
-            <button
-              type="button"
-              class="ai-modal-primary"
-              data-download-video
-            >
-              Download Video
-            </button>
+          <div class="saved-time">
 
-            <button
-              type="button"
-              class="ai-modal-secondary"
-              data-close-video
-            >
-              Close
-            </button>
+            <span>
+              Last saved
+            </span>
+
+            <strong id="savedTime">
+              Not saved yet
+            </strong>
 
           </div>
 
-        </div>
+        </section>
 
-      </div>
 
-    `;
 
+        <!-- ===============================================
+             HOW IT WORKS
+             =============================================== -->
+        <section class="sidebar-card help-card">
 
-    document.body.appendChild(
-      modal
-    );
+          <span class="sidebar-kicker">
+            HOW IT WORKS
+          </span>
 
+          <h3>
+            Your AI Mentor Workflow
+          </h3>
 
-    const video =
-      modal.querySelector(
-        "video"
-      );
 
+          <div class="help-flow">
 
-    if (video) {
+            <div class="help-flow-item">
 
-      video.addEventListener(
-        "error",
-        () => {
+              <span>01</span>
 
-          showToast(
-            "The generated video URL could not be played.",
-            "error"
-          );
+              <div>
+                <strong>
+                  Face
+                </strong>
 
-        }
-      );
+                <small>
+                  Add your mentor video
+                </small>
+              </div>
 
-    }
+            </div>
 
 
-    const close =
-      modal.querySelector(
-        ".ai-preparation-close"
-      );
+            <div class="help-flow-item">
 
+              <span>02</span>
 
-    const closeButton =
-      modal.querySelector(
-        "[data-close-video]"
-      );
+              <div>
+                <strong>
+                  Voice
+                </strong>
 
+                <small>
+                  Add your voice sample
+                </small>
+              </div>
 
-    const download =
-      modal.querySelector(
-        "[data-download-video]"
-      );
+            </div>
 
 
-    const closeResult =
-      () => {
+            <div class="help-flow-item">
 
-        modal.remove();
+              <span>03</span>
 
-      };
+              <div>
+                <strong>
+                  Script
+                </strong>
 
+                <small>
+                  Write your lesson
+                </small>
+              </div>
 
-    if (close) {
+            </div>
 
-      close.addEventListener(
-        "click",
-        closeResult
-      );
 
-    }
+            <div class="help-flow-item">
 
+              <span>04</span>
 
-    if (closeButton) {
+              <div>
+                <strong>
+                  AI Video
+                </strong>
 
-      closeButton.addEventListener(
-        "click",
-        closeResult
-      );
+                <small>
+                  Connect provider and generate
+                </small>
+              </div>
 
-    }
+            </div>
 
+          </div>
 
-    if (download) {
+        </section>
 
-      download.addEventListener(
-        "click",
-        () => {
 
-          const Video =
-            window.SNKAI.Video;
 
+        <!-- ===============================================
+             IMPORTANT NOTE
+             =============================================== -->
+        <section class="sidebar-card info-card">
 
-          if (Video) {
+          <div class="info-icon">
+            ℹ
+          </div>
 
-            Video.download(
-              "snk-ai-mentor-video.mp4"
-            );
+          <div>
 
-          } else {
+            <strong>
+              AI Provider
+            </strong>
 
-            window.open(
-              videoUrl,
-              "_blank"
-            );
+            <p>
+              This studio prepares your project for an external
+              AI avatar and voice provider. Actual face/voice
+              generation requires a provider connection and
+              secure server-side API integration.
+            </p>
 
-          }
+          </div>
 
-        }
-      );
+        </section>
 
-    }
+      </aside>
 
-  }
+    </section>
 
+  </main>
 
-  /* =======================================================
-     37. EXPORT PROJECT
-     ======================================================= */
 
-  function exportProject() {
 
-    const project =
-      collectProject();
+  <!-- =====================================================
+       TOAST
+       ===================================================== -->
+  <div
+    class="mentor-toast"
+    id="mentorToast"
+    role="status"
+    aria-live="polite"
+  >
 
+    <span class="toast-icon">
+      ✓
+    </span>
 
-    const blob =
-      new Blob(
-        [
-          JSON.stringify(
-            project,
-            null,
-            2
-          )
-        ],
-        {
-          type:
-            "application/json"
-        }
-      );
+    <span id="toastMessage">
+      Saved
+    </span>
 
+  </div>
 
-    const url =
-      URL.createObjectURL(
-        blob
-      );
 
 
-    const link =
-      document.createElement(
-        "a"
-      );
+  <!-- =====================================================
+       REQUIRED ENGINE SCRIPTS
+       
+       IMPORTANT:
+       Load order must remain:
 
+       1. Global script
+       2. AI config
+       3. Avatar engine
+       4. Voice engine
+       5. Video engine
+       6. Mentor Studio controller
+       ===================================================== -->
 
-    link.href =
-      url;
+  <script src="../script.js"></script>
 
+  <script src="../ai/ai-config.js"></script>
 
-    link.download =
-      createFileName(
-        state.projectName
-      ) +
-      ".json";
+  <script src="../ai/avatar.js"></script>
 
+  <script src="../ai/voice.js"></script>
 
-    document.body.appendChild(
-      link
-    );
+  <script src="../ai/video.js"></script>
 
+  <script src="ai-mentor.js"></script>
 
-    link.click();
-
-    link.remove();
-
-
-    URL.revokeObjectURL(
-      url
-    );
-
-
-    showToast(
-      "Project JSON exported.",
-      "success"
-    );
-
-  }
-
-
-  /* =======================================================
-     38. CREATE FILE NAME
-     ======================================================= */
-
-  function createFileName(
-    name
-  ) {
-
-    return String(
-      name ||
-        "snk-ai-mentor-project"
-    )
-      .trim()
-      .replace(
-        /[<>:"/\\|?*\x00-\x1F]/g,
-        ""
-      )
-      .replace(
-        /\s+/g,
-        "-"
-      )
-      .slice(
-        0,
-        80
-      ) ||
-      "snk-ai-mentor-project";
-
-  }
-
-
-  /* =======================================================
-     39. ESCAPE HTML
-     ======================================================= */
-
-  function escapeHtml(
-    value
-  ) {
-
-    return String(
-      value || ""
-    )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
-      );
-
-  }
-
-
-  /* =======================================================
-     40. DRAG & DROP
-     ======================================================= */
-
-  function setupDropZone(
-    areaId,
-    inputId,
-    callback
-  ) {
-
-    const area =
-      $(areaId);
-
-
-    const input =
-      $(inputId);
-
-
-    if (!area || !input) {
-      return;
-    }
-
-
-    area.addEventListener(
-      "dragover",
-      event => {
-
-        event.preventDefault();
-
-        area.classList.add(
-          "dragover"
-        );
-
-      }
-    );
-
-
-    area.addEventListener(
-      "dragleave",
-      () => {
-
-        area.classList.remove(
-          "dragover"
-        );
-
-      }
-    );
-
-
-    area.addEventListener(
-      "drop",
-      event => {
-
-        event.preventDefault();
-
-        area.classList.remove(
-          "dragover"
-        );
-
-
-        const file =
-          event.dataTransfer &&
-          event.dataTransfer.files
-            ? event.dataTransfer.files[0]
-            : null;
-
-
-        if (file) {
-
-          callback(file);
-
-        }
-
-      }
-    );
-
-
-    input.addEventListener(
-      "change",
-      () => {
-
-        const file =
-          input.files &&
-          input.files[0]
-            ? input.files[0]
-            : null;
-
-
-        if (file) {
-
-          callback(file);
-
-        }
-
-
-        input.value =
-          "";
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     41. BUTTON EVENTS
-     ======================================================= */
-
-  function setupEvents() {
-
-    /*
-     * Face upload
-     */
-
-    setupDropZone(
-      "faceUploadArea",
-      "faceVideoInput",
-      handleFaceVideo
-    );
-
-
-    /*
-     * Voice upload
-     */
-
-    setupDropZone(
-      "voiceUploadArea",
-      "voiceInput",
-      handleVoiceAudio
-    );
-
-
-    /*
-     * Face buttons
-     */
-
-    if ($("selectFaceVideoBtn")) {
-
-      $("selectFaceVideoBtn")
-        .addEventListener(
-          "click",
-          () => {
-
-            $("faceVideoInput")
-              ?.click();
-
-          }
-        );
-
-    }
-
-
-    if ($("changeFaceVideoBtn")) {
-
-      $("changeFaceVideoBtn")
-        .addEventListener(
-          "click",
-          () => {
-
-            $("faceVideoInput")
-              ?.click();
-
-          }
-        );
-
-    }
-
-
-    /*
-     * Voice buttons
-     */
-
-    if ($("selectVoiceBtn")) {
-
-      $("selectVoiceBtn")
-        .addEventListener(
-          "click",
-          () => {
-
-            $("voiceInput")
-              ?.click();
-
-          }
-        );
-
-    }
-
-
-    if ($("removeVoiceBtn")) {
-
-      $("removeVoiceBtn")
-        .addEventListener(
-          "click",
-          removeVoice
-        );
-
-    }
-
-
-    /*
-     * Script
-     */
-
-    if ($("lessonScript")) {
-
-      $("lessonScript")
-        .addEventListener(
-          "input",
-          handleScriptInput
-        );
-
-    }
-
-
-    if ($("clearScriptBtn")) {
-
-      $("clearScriptBtn")
-        .addEventListener(
-          "click",
-          clearScript
-        );
-
-    }
-
-
-    /*
-     * Project name
-     */
-
-    if ($("projectName")) {
-
-      $("projectName")
-        .addEventListener(
-          "input",
-          event =>
-            syncProjectName(
-              event.target
-            )
-        );
-
-    }
-
-
-    if ($("projectNameTop")) {
-
-      $("projectNameTop")
-        .addEventListener(
-          "input",
-          event =>
-            syncProjectName(
-              event.target
-            )
-        );
-
-    }
-
-
-    /*
-     * Save buttons
-     */
-
-    if ($("saveProjectBtn")) {
-
-      $("saveProjectBtn")
-        .addEventListener(
-          "click",
-          () => saveProject()
-        );
-
-    }
-
-
-    if ($("sidebarSaveBtn")) {
-
-      $("sidebarSaveBtn")
-        .addEventListener(
-          "click",
-          () => saveProject()
-        );
-
-    }
-
-
-    /*
-     * Export
-     */
-
-    if ($("exportProjectBtn")) {
-
-      $("exportProjectBtn")
-        .addEventListener(
-          "click",
-          exportProject
-        );
-
-    }
-
-
-    /*
-     * Prepare AI Video
-     */
-
-    if ($("prepareVideoBtn")) {
-
-      $("prepareVideoBtn")
-        .addEventListener(
-          "click",
-          prepareAIVideo
-        );
-
-    }
-
-
-    /*
-     * Video settings
-     */
-
-    [
-
-      "videoFormat",
-
-      "videoResolution",
-
-      "mentorPosition",
-
-      "videoBackground"
-
-    ].forEach(
-      id => {
-
-        const element =
-          $(id);
-
-
-        if (element) {
-
-          element.addEventListener(
-            "change",
-            handleVideoSettings
-          );
-
-        }
-
-      }
-    );
-
-
-    /*
-     * Auto-save
-     */
-
-    document.addEventListener(
-      "input",
-      event => {
-
-        if (
-          event.target &&
-          event.target.id ===
-            "lessonScript"
-        ) {
-
-          clearTimeout(
-            setupEvents.autoSaveTimer
-          );
-
-
-          setupEvents.autoSaveTimer =
-            setTimeout(
-              () => {
-
-                saveProject(
-                  true
-                );
-
-                setText(
-                  "autosaveStatus",
-                  "Auto-saved"
-                );
-
-              },
-              1200
-            );
-
-        }
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     42. ENGINE EVENT CONNECTION
-     ======================================================= */
-
-  function connectEngineEvents() {
-
-    const Video =
-      window.SNKAI.Video;
-
-
-    if (!Video) {
-      return;
-    }
-
-
-    Video.on(
-      "generationStarted",
-      () => {
-
-        state.videoStatus =
-          "processing";
-
-
-        state.videoProgress =
-          5;
-
-
-        showToast(
-          "AI video generation started.",
-          "info"
-        );
-
-      }
-    );
-
-
-    Video.on(
-      "progress",
-      data => {
-
-        state.videoProgress =
-          Number(
-            data.progress
-          ) || 0;
-
-
-        state.videoStatus =
-          data.status ||
-          "processing";
-
-      }
-    );
-
-
-    Video.on(
-      "queued",
-      data => {
-
-        state.videoStatus =
-          "queued";
-
-
-        state.videoJobId =
-          data.jobId ||
-          null;
-
-      }
-    );
-
-
-    Video.on(
-      "generationCompleted",
-      data => {
-
-        state.videoStatus =
-          "completed";
-
-
-        state.videoProgress =
-          100;
-
-
-        state.videoJobId =
-          data.jobId ||
-          null;
-
-      }
-    );
-
-
-    Video.on(
-      "error",
-      data => {
-
-        state.videoStatus =
-          "error";
-
-
-        state.videoProgress =
-          0;
-
-
-        console.error(
-          "[SNK AI Mentor]",
-          data
-        );
-
-      }
-    );
-
-
-    Video.on(
-      "cancelled",
-      () => {
-
-        state.videoStatus =
-          "cancelled";
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     43. KEYBOARD SHORTCUTS
-     ======================================================= */
-
-  function setupKeyboard() {
-
-    document.addEventListener(
-      "keydown",
-      event => {
-
-        /*
-         * Ctrl/Cmd + S
-         */
-
-        if (
-          (
-            event.ctrlKey ||
-            event.metaKey
-          ) &&
-          event.key.toLowerCase() ===
-            "s"
-        ) {
-
-          event.preventDefault();
-
-          saveProject();
-
-        }
-
-      }
-    );
-
-  }
-
-
-  /* =======================================================
-     44. INITIALIZE
-     ======================================================= */
-
-  function init() {
-
-    if (
-      state.initialized
-    ) {
-
-      return;
-
-    }
-
-
-    state.initialized =
-      true;
-
-
-    setupEvents();
-
-    setupKeyboard();
-
-    connectEngineEvents();
-
-    restoreProject();
-
-    updateScriptCounters();
-
-    updateReadiness();
-
-
-    /*
-     * Sync Video engine with current UI.
-     */
-
-    const Video =
-      window.SNKAI.Video;
-
-
-    if (Video) {
-
-      Video.setScript(
-        $("lessonScript")
-          ? $("lessonScript").value
-          : ""
-      );
-
-
-      Video.setSettings(
-        state.videoSettings
-      );
-
-    }
-
-
-    console.log(
-      "[SNK AI Mentor] Mentor Studio initialized."
-    );
-
-  }
-
-
-  /* =======================================================
-     45. PUBLIC API
-     ======================================================= */
-
-  window.SNKAI.MentorStudio = {
-
-    getState() {
-
-      return {
-
-        ...state,
-
-        videoSettings: {
-
-          ...state.videoSettings
-
-        }
-
-      };
-
-    },
-
-
-    save() {
-
-      return saveProject();
-
-    },
-
-
-    exportProject() {
-
-      return exportProject();
-
-    },
-
-
-    prepareVideo() {
-
-      return prepareAIVideo();
-
-    },
-
-
-    clearFace() {
-
-      return removeFaceVideo();
-
-    },
-
-
-    clearVoice() {
-
-      return removeVoice();
-
-    },
-
-
-    clearScript() {
-
-      return clearScript();
-
-    },
-
-
-    showToast
-
-  };
-
-
-  /* =======================================================
-     46. START
-     ======================================================= */
-
-  if (
-    document.readyState ===
-    "loading"
-  ) {
-
-    document.addEventListener(
-      "DOMContentLoaded",
-      init,
-      {
-        once: true
-      }
-    );
-
-  } else {
-
-    init();
-
-  }
-
-
-})();
+</body>
+</html>
