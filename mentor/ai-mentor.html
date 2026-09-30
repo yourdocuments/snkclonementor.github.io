@@ -1,1216 +1,979 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Mentor Studio | Personal Course Studio</title>
+  <meta charset="UTF-8">
 
-<style>
-:root{
-  --bg:#080d18;
-  --panel:#111a2b;
-  --panel2:#172338;
-  --line:#293750;
-  --text:#f4f7ff;
-  --muted:#94a3b8;
-  --blue:#60a5fa;
-  --cyan:#67e8f9;
-  --green:#34d399;
-  --purple:#a78bfa;
-  --danger:#fb7185;
-}
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-*{box-sizing:border-box}
+  <meta
+    name="description"
+    content="SNK AI Mentor Studio — Create AI teaching videos using your own face, voice and lesson scripts."
+  >
 
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
-}
+  <title>AI Mentor Studio | SNK AI Mentor</title>
 
-button,input,textarea,select{font:inherit}
-button{cursor:pointer}
+  <!-- Main site CSS -->
+  <link rel="stylesheet" href="../style.css">
 
-.app{
-  min-height:100vh;
-  display:flex;
-}
-
-/* SIDEBAR */
-
-.sidebar{
-  width:245px;
-  background:#0c1423;
-  border-right:1px solid var(--line);
-  padding:24px 16px;
-  display:flex;
-  flex-direction:column;
-  flex-shrink:0;
-}
-
-.brand{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:0 8px 28px;
-}
-
-.brand-icon{
-  width:42px;
-  height:42px;
-  border-radius:13px;
-  display:grid;
-  place-items:center;
-  background:linear-gradient(135deg,#2563eb,#7c3aed);
-  font-size:21px;
-}
-
-.brand strong{display:block;font-size:15px}
-.brand small{color:var(--muted);font-size:11px}
-
-.nav-label{
-  color:#64748b;
-  font-size:10px;
-  font-weight:800;
-  letter-spacing:1.5px;
-  padding:15px 12px 9px;
-}
-
-.nav-item{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:12px;
-  border-radius:10px;
-  color:#a9b7cc;
-  font-size:13px;
-  margin-bottom:5px;
-  text-decoration:none;
-}
-
-.nav-item:hover,.nav-item.active{
-  background:#1c2b43;
-  color:#fff;
-}
-
-.nav-item.active{
-  border:1px solid #355987;
-}
-
-.nav-icon{
-  width:20px;
-  text-align:center;
-  font-size:17px;
-}
-
-.sidebar-bottom{
-  margin-top:auto;
-  background:#142238;
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:15px;
-}
-
-.sidebar-bottom strong{font-size:12px}
-.sidebar-bottom p{
-  color:var(--muted);
-  font-size:11px;
-  line-height:1.6;
-}
-
-/* MAIN */
-
-.main{
-  min-width:0;
-  flex:1;
-}
-
-.topbar{
-  height:75px;
-  border-bottom:1px solid var(--line);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 30px;
-  background:#0b1321;
-}
-
-.breadcrumb{
-  color:var(--muted);
-  font-size:13px;
-}
-
-.breadcrumb strong{color:#fff}
-
-.top-actions{
-  display:flex;
-  align-items:center;
-  gap:12px;
-}
-
-.status{
-  font-size:11px;
-  color:var(--green);
-  background:#103327;
-  padding:8px 12px;
-  border-radius:30px;
-}
-
-.avatar-user{
-  width:36px;
-  height:36px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  background:linear-gradient(135deg,#2563eb,#9333ea);
-  font-weight:700;
-}
-
-.content{
-  max-width:1500px;
-  padding:30px;
-  margin:auto;
-}
-
-.hero{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:20px;
-  margin-bottom:26px;
-}
-
-.eyebrow{
-  color:var(--cyan);
-  font-size:11px;
-  font-weight:800;
-  letter-spacing:2px;
-  margin-bottom:10px;
-}
-
-h1{
-  font-size:clamp(25px,3vw,36px);
-  letter-spacing:-1px;
-  margin:0 0 10px;
-}
-
-.hero p{
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.7;
-  max-width:650px;
-  margin:0;
-}
-
-.btn{
-  border:1px solid var(--line);
-  color:#fff;
-  background:#1b2940;
-  padding:11px 16px;
-  border-radius:10px;
-  font-size:12px;
-  font-weight:700;
-  transition:.2s;
-}
-
-.btn:hover{filter:brightness(1.2);transform:translateY(-1px)}
-
-.btn-primary{
-  border:0;
-  background:linear-gradient(135deg,#2563eb,#7c3aed);
-}
-
-.btn-success{
-  border:0;
-  background:linear-gradient(135deg,#059669,#0d9488);
-}
-
-.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-
-/* CARDS */
-
-.card{
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:16px;
-  overflow:hidden;
-}
-
-.card-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:19px 20px;
-  border-bottom:1px solid var(--line);
-}
-
-.card-head h2{
-  font-size:14px;
-  margin:0;
-}
-
-.card-head p{
-  font-size:11px;
-  color:var(--muted);
-  margin:5px 0 0;
-}
-
-.card-body{padding:20px}
-
-.setup-grid{
-  display:grid;
-  grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);
-  gap:20px;
-  align-items:start;
-}
-
-.upload-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px;
-}
-
-.upload-box{
-  min-height:205px;
-  border:1px dashed #405574;
-  background:#0d1728;
-  border-radius:13px;
-  padding:20px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  transition:.2s;
-}
-
-.upload-box:hover{
-  border-color:var(--blue);
-  background:#12213a;
-}
-
-.upload-icon{
-  width:48px;
-  height:48px;
-  display:grid;
-  place-items:center;
-  border-radius:14px;
-  background:#1b3150;
-  font-size:23px;
-  margin-bottom:13px;
-}
-
-.upload-box strong{font-size:13px}
-.upload-box p{
-  color:var(--muted);
-  font-size:11px;
-  line-height:1.6;
-  max-width:220px;
-}
-
-.upload-box input{display:none}
-
-.file-name{
-  color:var(--green);
-  font-size:11px;
-  overflow-wrap:anywhere;
-  margin-top:5px;
-}
-
-.preview{
-  margin-top:17px;
-  background:#080e19;
-  border:1px solid var(--line);
-  border-radius:13px;
-  overflow:hidden;
-}
-
-.preview-top{
-  padding:13px 15px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  border-bottom:1px solid var(--line);
-}
-
-.preview-top strong{font-size:12px}
-
-.preview-stage{
-  aspect-ratio:16/9;
-  display:grid;
-  place-items:center;
-  background:
-    radial-gradient(ellipse at 50% 30%,#263b5d 0%,#111d31 45%,#080e19 100%);
-  position:relative;
-  overflow:hidden;
-}
-
-.preview-stage video{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  background:#05080e;
-}
-
-.preview-placeholder{
-  text-align:center;
-  color:#9fb0c9;
-}
-
-.preview-placeholder .person{
-  width:75px;
-  height:75px;
-  margin:auto auto 13px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  font-size:32px;
-  background:linear-gradient(135deg,#2563eb,#7c3aed);
-}
-
-.preview-placeholder strong{font-size:13px}
-.preview-placeholder p{font-size:11px;color:#8293ac}
-
-.preview-controls{
-  padding:12px;
-  display:flex;
-  align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
-}
-
-.preview-controls audio{width:100%;height:34px}
-
-.field{margin-bottom:17px}
-
-.field label{
-  display:block;
-  color:#dce6f5;
-  font-size:12px;
-  font-weight:700;
-  margin-bottom:9px;
-}
-
-.field input,.field select,.field textarea{
-  width:100%;
-  background:#0b1423;
-  color:#fff;
-  border:1px solid #30415d;
-  border-radius:9px;
-  padding:12px;
-  outline:none;
-  font-size:12px;
-}
-
-.field input:focus,.field select:focus,.field textarea:focus{
-  border-color:var(--blue);
-  box-shadow:0 0 0 3px #3b82f622;
-}
-
-.field textarea{
-  min-height:145px;
-  resize:vertical;
-  line-height:1.7;
-}
-
-.helper{
-  font-size:10px;
-  color:var(--muted);
-  line-height:1.6;
-  margin-top:7px;
-}
-
-.voice-panel{
-  border:1px solid var(--line);
-  background:#0d1728;
-  border-radius:12px;
-  padding:15px;
-  margin-top:15px;
-}
-
-.voice-panel strong{font-size:12px}
-.voice-panel p{color:var(--muted);font-size:11px;line-height:1.6}
-
-.voice-panel audio{width:100%;margin-top:10px}
-
-.section{margin-top:22px}
-
-.section-title{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:13px;
-}
-
-.section-title h2{font-size:15px;margin:0}
-.section-title span{font-size:11px;color:var(--muted)}
-
-.script-layout{
-  display:grid;
-  grid-template-columns:1fr 300px;
-  gap:20px;
-}
-
-.script-toolbar{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-bottom:12px;
-}
-
-.script-toolbar small{color:var(--muted);font-size:11px}
-
-.script-actions{display:flex;gap:8px;flex-wrap:wrap}
-
-.script-editor{
-  width:100%;
-  min-height:250px;
-  padding:18px;
-  background:#0b1423;
-  border:1px solid var(--line);
-  color:#e8f0ff;
-  border-radius:12px;
-  resize:vertical;
-  outline:none;
-  font-size:13px;
-  line-height:1.8;
-}
-
-.script-editor:focus{border-color:var(--blue)}
-
-.generation-panel{
-  background:linear-gradient(145deg,#172946,#171b38);
-  border:1px solid #35476a;
-  border-radius:14px;
-  padding:20px;
-}
-
-.generation-panel h3{font-size:14px;margin:0 0 8px}
-.generation-panel p{
-  color:#aab8d0;
-  font-size:11px;
-  line-height:1.7;
-}
-
-.generation-panel .btn{width:100%;margin-top:9px}
-
-.generation-panel .note{
-  color:#fbbf24;
-  font-size:10px;
-  margin-top:13px;
-}
-
-.progress-wrap{margin-top:15px;display:none}
-.progress-track{
-  height:7px;
-  background:#0a1322;
-  border-radius:10px;
-  overflow:hidden;
-}
-.progress-fill{
-  height:100%;
-  width:0;
-  background:linear-gradient(90deg,#60a5fa,#a78bfa);
-  transition:width .3s;
-}
-.progress-label{font-size:11px;color:#cbd5e1;margin-top:8px}
-
-.bottom-note{
-  margin-top:22px;
-  border:1px solid #34445e;
-  background:#111c2d;
-  border-radius:12px;
-  padding:15px;
-  color:#a9b8ce;
-  font-size:11px;
-  line-height:1.7;
-}
-
-.bottom-note strong{color:#fff}
-
-.toast{
-  position:fixed;
-  bottom:25px;
-  right:25px;
-  background:#173b32;
-  color:#d1fae5;
-  border:1px solid #23785e;
-  border-radius:10px;
-  padding:13px 18px;
-  font-size:12px;
-  box-shadow:0 10px 35px #0008;
-  opacity:0;
-  transform:translateY(15px);
-  pointer-events:none;
-  transition:.25s;
-  z-index:99;
-}
-
-.toast.show{opacity:1;transform:translateY(0)}
-
-.mobile-menu{display:none}
-
-@media(max-width:1050px){
-  .sidebar{width:205px}
-  .setup-grid{grid-template-columns:1fr}
-  .script-layout{grid-template-columns:1fr}
-}
-
-@media(max-width:700px){
-  .sidebar{display:none}
-  .topbar{height:62px;padding:0 16px}
-  .content{padding:20px 14px}
-  .hero{flex-direction:column}
-  .upload-grid{grid-template-columns:1fr}
-  .upload-box{min-height:175px}
-  .top-actions .status{display:none}
-  .mobile-menu{display:inline-block}
-  .card-body{padding:14px}
-}
-</style>
+  <!-- Mentor Studio CSS -->
+  <link rel="stylesheet" href="ai-mentor.css">
 </head>
 
 <body>
 
-<div class="app">
-
-<aside class="sidebar">
-  <div class="brand">
-    <div class="brand-icon">✦</div>
-    <div>
-      <strong>Personal Course Studio</strong>
-      <small>Creator Workspace</small>
-    </div>
+  <!-- =====================================================
+       BACKGROUND
+  ====================================================== -->
+  <div class="mentor-bg">
+    <div class="mentor-orb mentor-orb-1"></div>
+    <div class="mentor-orb mentor-orb-2"></div>
+    <div class="mentor-grid"></div>
   </div>
 
-  <div class="nav-label">WORKSPACE</div>
-  <a class="nav-item" href="../index.html"><span class="nav-icon">⌂</span>Dashboard</a>
-  <a class="nav-item" href="#"><span class="nav-icon">▣</span>My Projects</a>
-  <a class="nav-item" href="#"><span class="nav-icon">◉</span>Recording Studio</a>
 
-  <div class="nav-label">AI PRODUCTION</div>
-  <a class="nav-item active" href="ai-mentor.html"><span class="nav-icon">✧</span>AI Mentor Studio</a>
-  <a class="nav-item" href="#"><span class="nav-icon">♫</span>Voice Library</a>
-  <a class="nav-item" href="#"><span class="nav-icon">▤</span>Script Library</a>
-  <a class="nav-item" href="#"><span class="nav-icon">▧</span>Video Exports</a>
+  <!-- =====================================================
+       TOP HEADER
+  ====================================================== -->
+  <header class="mentor-header">
 
-  <div class="nav-label">SETTINGS</div>
-  <a class="nav-item" href="#"><span class="nav-icon">⚙</span>Preferences</a>
+    <div class="mentor-header-left">
 
-  <div class="sidebar-bottom">
-    <strong>✦ Your Private Studio</strong>
-    <p>Your uploaded samples are previewed locally in this browser. No AI generation service is connected yet.</p>
-  </div>
-</aside>
+      <a href="../index.html" class="mentor-brand">
+        <span class="mentor-brand-icon">S</span>
 
-<main class="main">
+        <span>
+          <strong>SNK AI</strong>
+          <small>Mentor Studio</small>
+        </span>
+      </a>
 
-<header class="topbar">
-  <div class="breadcrumb">
-    <span class="mobile-menu">☰ &nbsp;</span>
-    Studio / <strong>AI Mentor Setup</strong>
-  </div>
-  <div class="top-actions">
-    <span class="status">● Local Workspace</span>
-    <div class="avatar-user">SNK</div>
-  </div>
-</header>
+      <div class="mentor-divider"></div>
 
-<div class="content">
-
-<section class="hero">
-  <div>
-    <div class="eyebrow">YOUR DIGITAL TWIN</div>
-    <h1>Meet Your AI Mentor</h1>
-    <p>
-      Create your personal digital presenter using your own authorized
-      face and voice samples. Prepare your mentor once, then build
-      future lessons without repeatedly appearing on camera.
-    </p>
-  </div>
-  <button class="btn" id="saveProjectBtn">↧ Save Setup</button>
-</section>
-
-<div class="setup-grid">
-
-<!-- LEFT: AVATAR SETUP -->
-
-<section class="card">
-  <div class="card-head">
-    <div>
-      <h2>01 / Avatar Identity</h2>
-      <p>Upload a video of yourself for your personal avatar setup.</p>
-    </div>
-    <span class="status">Face Setup</span>
-  </div>
-
-  <div class="card-body">
-
-    <div class="upload-grid">
-
-      <label class="upload-box" for="avatarInput">
-        <div class="upload-icon">◉</div>
-        <strong>Upload Your Face Video</strong>
-        <p>Choose a clear video with your face visible and good lighting.</p>
-        <span class="btn">Choose Video</span>
-        <span class="file-name" id="avatarFileName">No video selected</span>
-        <input type="file" id="avatarInput" accept="video/*">
-      </label>
-
-      <label class="upload-box" for="voiceInput">
-        <div class="upload-icon">♫</div>
-        <strong>Upload Your Voice Sample</strong>
-        <p>Use your own clean voice recording without background noise.</p>
-        <span class="btn">Choose Audio</span>
-        <span class="file-name" id="voiceFileName">No audio selected</span>
-        <input type="file" id="voiceInput" accept="audio/*">
-      </label>
-
-    </div>
-
-    <div class="preview">
-      <div class="preview-top">
-        <strong>Avatar Video Preview</strong>
-        <span class="status">Local Preview</span>
+      <div class="project-name">
+        <span class="project-dot"></span>
+        <span id="projectNameTop">Untitled Mentor Project</span>
       </div>
 
-      <div class="preview-stage" id="avatarStage">
-        <div class="preview-placeholder" id="avatarPlaceholder">
-          <div class="person">◉</div>
-          <strong>Your Digital Mentor Preview</strong>
-          <p>Upload your video to preview it here.</p>
+    </div>
+
+
+    <div class="mentor-header-right">
+
+      <button
+        type="button"
+        class="header-btn"
+        id="saveProjectBtn"
+        title="Save project"
+      >
+        <span>💾</span>
+        <span>Save</span>
+      </button>
+
+      <button
+        type="button"
+        class="header-btn"
+        id="exportProjectBtn"
+        title="Export project"
+      >
+        <span>↗</span>
+        <span>Export</span>
+      </button>
+
+      <a
+        href="../index.html"
+        class="back-home-btn"
+      >
+        ← Home
+      </a>
+
+    </div>
+
+  </header>
+
+
+  <!-- =====================================================
+       MAIN APP
+  ====================================================== -->
+  <main class="mentor-app">
+
+    <!-- ===================================================
+         PAGE TITLE
+    ==================================================== -->
+    <section class="mentor-title-section">
+
+      <div>
+
+        <div class="eyebrow">
+          <span class="eyebrow-dot"></span>
+          AI PRODUCTION WORKSPACE
         </div>
-        <video id="avatarVideo" controls playsinline hidden></video>
+
+        <h1>
+          Build Your
+          <span>AI Mentor</span>
+        </h1>
+
+        <p>
+          Upload your face, add your voice, write your lesson,
+          and prepare everything for AI video generation.
+        </p>
+
       </div>
 
-      <div class="preview-controls">
-        <button class="btn" id="removeAvatarBtn">Remove Video</button>
-        <small style="color:#94a3b8">Supported formats depend on your browser.</small>
-      </div>
-    </div>
 
-    <div class="field" style="margin-top:20px">
-      <label for="mentorName">Mentor Display Name</label>
-      <input id="mentorName" type="text" placeholder="e.g. Usha — SNK AI Mentor">
-    </div>
+      <div class="studio-status">
 
-    <div class="field">
-      <label for="mentorStyle">Presentation Style</label>
-      <select id="mentorStyle">
-        <option value="professional">Professional Instructor</option>
-        <option value="friendly">Friendly & Conversational</option>
-        <option value="cinematic">Cinematic Presenter</option>
-        <option value="classroom">Classroom Teacher</option>
-      </select>
-    </div>
+        <div class="status-icon">
+          ✦
+        </div>
 
-  </div>
-</section>
-
-<!-- RIGHT: VOICE -->
-
-<section class="card">
-  <div class="card-head">
-    <div>
-      <h2>02 / Voice Identity</h2>
-      <p>Prepare your own voice sample for future voice generation.</p>
-    </div>
-    <span class="status">Voice Setup</span>
-  </div>
-
-  <div class="card-body">
-
-    <div class="voice-panel">
-      <strong>♫ My Voice Sample</strong>
-      <p>
-        Upload a recording of your own voice. You can listen to it
-        here before using it in a future AI workflow.
-      </p>
-      <audio id="voiceAudio" controls hidden></audio>
-      <div class="helper" id="voiceStatus">No voice sample uploaded.</div>
-    </div>
-
-    <div class="field" style="margin-top:22px">
-      <label for="voiceLanguage">Primary Language</label>
-      <select id="voiceLanguage">
-        <option value="bn">Bangla (বাংলা)</option>
-        <option value="en">English</option>
-        <option value="both">Bangla + English</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="voiceTone">Voice Presentation</label>
-      <select id="voiceTone">
-        <option>Natural & Clear</option>
-        <option>Warm & Friendly</option>
-        <option>Professional Instructor</option>
-        <option>Energetic Presenter</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="voiceNotes">Voice Notes (Optional)</label>
-      <textarea id="voiceNotes" style="min-height:100px" placeholder="Describe your preferred speaking style..."></textarea>
-    </div>
-
-    <div class="bottom-note">
-      <strong>Privacy reminder</strong><br>
-      Use only your own face and voice recordings, or samples for which you have explicit permission. This page currently keeps previews in your browser and does not upload them to an AI provider.
-    </div>
-
-  </div>
-</section>
-
-</div>
-
-<!-- SCRIPT SECTION -->
-
-<section class="section">
-  <div class="section-title">
-    <h2>03 / Script to Video</h2>
-    <span>Prepare your next lesson</span>
-  </div>
-
-  <div class="script-layout">
-
-    <section class="card">
-      <div class="card-head">
         <div>
-          <h2>Lesson Script Editor</h2>
-          <p>Write or paste the lesson narration for your digital mentor.</p>
-        </div>
-        <span class="status" id="scriptStatus">Draft</span>
-      </div>
-
-      <div class="card-body">
-
-        <div class="field">
-          <label for="lessonTitle">Lesson Title</label>
-          <input id="lessonTitle" placeholder="e.g. Introduction to Web Development">
-        </div>
-
-        <div class="script-toolbar">
-          <small id="wordCount">0 words · 0 characters</small>
-          <div class="script-actions">
-            <button class="btn" id="clearScriptBtn">Clear</button>
-            <button class="btn" id="copyScriptBtn">Copy Script</button>
-            <button class="btn" id="downloadScriptBtn">Export TXT</button>
-          </div>
-        </div>
-
-        <textarea class="script-editor" id="scriptEditor"
-          placeholder="Assalamu Alaikum everyone! Welcome to today's lesson...
-
-Write your lesson narration here. Your future AI Mentor will use this script to present the lesson with your authorized avatar and voice."></textarea>
-
-        <div class="helper">
-          Tip: Use short paragraphs and natural punctuation for easier narration editing.
+          <span>Studio Status</span>
+          <strong id="studioStatus">Ready to build</strong>
         </div>
 
       </div>
+
     </section>
 
-    <aside class="generation-panel">
-      <div class="eyebrow">PRODUCTION WORKFLOW</div>
-      <h3>Generate Your AI Lesson</h3>
-      <p>
-        Review your avatar, voice and script before connecting
-        a compatible AI video generation service.
-      </p>
 
-      <button class="btn btn-primary" id="generateBtn">
-        ✦ Prepare AI Video
-      </button>
+    <!-- ===================================================
+         PROGRESS STEPS
+    ==================================================== -->
+    <section class="workflow-progress">
 
-      <button class="btn" id="previewScriptBtn">
-        ▶ Preview Script
-      </button>
+      <div class="workflow-line"></div>
 
-      <div class="progress-wrap" id="progressWrap">
-        <div class="progress-track">
-          <div class="progress-fill" id="progressFill"></div>
+      <div class="workflow-step active" data-step="1">
+        <div class="workflow-number">1</div>
+        <div class="workflow-text">
+          <strong>Identity</strong>
+          <span>Face + Voice</span>
         </div>
-        <div class="progress-label" id="progressLabel">Preparing...</div>
       </div>
 
-      <div class="note">
-        Demo mode: this page does not generate a cloned voice or synthetic avatar yet.
+      <div class="workflow-step" data-step="2">
+        <div class="workflow-number">2</div>
+        <div class="workflow-text">
+          <strong>Lesson</strong>
+          <span>Your Script</span>
+        </div>
       </div>
-    </aside>
 
+      <div class="workflow-step" data-step="3">
+        <div class="workflow-number">3</div>
+        <div class="workflow-text">
+          <strong>Prepare</strong>
+          <span>AI Video</span>
+        </div>
+      </div>
+
+      <div class="workflow-step" data-step="4">
+        <div class="workflow-number">4</div>
+        <div class="workflow-text">
+          <strong>Export</strong>
+          <span>Final Video</span>
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ===================================================
+         DASHBOARD GRID
+    ==================================================== -->
+    <section class="mentor-dashboard-grid">
+
+
+      <!-- =================================================
+           LEFT COLUMN
+      ================================================== -->
+      <div class="mentor-main-column">
+
+
+        <!-- ===============================================
+             FACE IDENTITY CARD
+        ================================================ -->
+        <article class="studio-card identity-card">
+
+          <div class="card-header">
+
+            <div class="card-title-wrap">
+
+              <div class="card-icon face-icon">
+                ◉
+              </div>
+
+              <div>
+                <span class="card-kicker">01 · IDENTITY</span>
+                <h2>Mentor Face</h2>
+                <p>
+                  Upload a clear video of yourself for your AI avatar.
+                </p>
+              </div>
+
+            </div>
+
+            <span class="required-badge">
+              Required
+            </span>
+
+          </div>
+
+
+          <div class="face-upload-area" id="faceUploadArea">
+
+            <input
+              type="file"
+              id="faceVideoInput"
+              accept="video/*"
+              hidden
+            >
+
+            <div
+              class="upload-empty"
+              id="faceUploadEmpty"
+            >
+
+              <div class="upload-icon">
+                🎥
+              </div>
+
+              <h3>Upload Mentor Video</h3>
+
+              <p>
+                Use a well-lit video with your face clearly visible.
+              </p>
+
+              <button
+                type="button"
+                class="primary-upload-btn"
+                id="selectFaceVideoBtn"
+              >
+                <span>＋</span>
+                Choose Video
+              </button>
+
+              <small>
+                MP4, MOV, WebM · Recommended 1080p
+              </small>
+
+            </div>
+
+
+            <div
+              class="video-preview-wrapper"
+              id="facePreviewWrapper"
+              hidden
+            >
+
+              <video
+                id="faceVideoPreview"
+                controls
+                playsinline
+              ></video>
+
+              <div class="preview-overlay">
+
+                <span class="preview-badge">
+                  ✓ Face Video Ready
+                </span>
+
+                <button
+                  type="button"
+                  class="change-media-btn"
+                  id="changeFaceVideoBtn"
+                >
+                  Change
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="upload-info-grid">
+
+            <div class="info-item">
+              <span>Lighting</span>
+              <strong>Bright & Clear</strong>
+            </div>
+
+            <div class="info-item">
+              <span>Framing</span>
+              <strong>Head + Shoulders</strong>
+            </div>
+
+            <div class="info-item">
+              <span>Background</span>
+              <strong>Simple</strong>
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             VOICE CARD
+        ================================================ -->
+        <article class="studio-card voice-card">
+
+          <div class="card-header">
+
+            <div class="card-title-wrap">
+
+              <div class="card-icon voice-icon">
+                ♪
+              </div>
+
+              <div>
+                <span class="card-kicker">02 · VOICE</span>
+                <h2>Mentor Voice</h2>
+                <p>
+                  Add a clean sample of your natural speaking voice.
+                </p>
+              </div>
+
+            </div>
+
+            <span class="required-badge">
+              Required
+            </span>
+
+          </div>
+
+
+          <div
+            class="voice-upload-area"
+            id="voiceUploadArea"
+          >
+
+            <input
+              type="file"
+              id="voiceInput"
+              accept="audio/*"
+              hidden
+            >
+
+            <div
+              class="voice-empty"
+              id="voiceUploadEmpty"
+            >
+
+              <div class="voice-mic">
+                🎙
+              </div>
+
+              <div class="voice-upload-content">
+
+                <h3>Upload Voice Sample</h3>
+
+                <p>
+                  A clean recording without music or background noise.
+                </p>
+
+                <button
+                  type="button"
+                  class="secondary-upload-btn"
+                  id="selectVoiceBtn"
+                >
+                  Upload Audio
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="voice-preview"
+              id="voicePreview"
+              hidden
+            >
+
+              <div class="voice-file-icon">
+                ♪
+              </div>
+
+              <div class="voice-file-info">
+
+                <strong id="voiceFileName">
+                  Voice Sample
+                </strong>
+
+                <span id="voiceFileMeta">
+                  Audio ready
+                </span>
+
+                <audio
+                  id="voiceAudioPlayer"
+                  controls
+                ></audio>
+
+              </div>
+
+              <button
+                type="button"
+                class="remove-media-btn"
+                id="removeVoiceBtn"
+                title="Remove voice"
+              >
+                ×
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <div class="voice-tip">
+
+            <span>💡</span>
+
+            <p>
+              Tip: Record in a quiet room and speak naturally.
+              Consistent voice quality gives better results.
+            </p>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             LESSON SCRIPT
+        ================================================ -->
+        <article class="studio-card script-card">
+
+          <div class="card-header">
+
+            <div class="card-title-wrap">
+
+              <div class="card-icon script-icon">
+                ✎
+              </div>
+
+              <div>
+                <span class="card-kicker">03 · LESSON</span>
+                <h2>Lesson Script</h2>
+                <p>
+                  Write the exact lesson your AI mentor should teach.
+                </p>
+              </div>
+
+            </div>
+
+            <div class="script-actions">
+
+              <button
+                type="button"
+                class="mini-btn"
+                id="clearScriptBtn"
+              >
+                Clear
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <div class="script-toolbar">
+
+            <div class="script-toolbar-left">
+
+              <span class="language-label">
+                Language
+              </span>
+
+              <select id="scriptLanguage">
+                <option value="bn">বাংলা</option>
+                <option value="en">English</option>
+                <option value="bn-en">বাংলা + English</option>
+              </select>
+
+              <select id="scriptStyle">
+
+                <option value="teaching">
+                  Teaching
+                </option>
+
+                <option value="professional">
+                  Professional
+                </option>
+
+                <option value="friendly">
+                  Friendly
+                </option>
+
+                <option value="energetic">
+                  Energetic
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <div class="script-toolbar-right">
+
+              <span id="wordCount">
+                0 words
+              </span>
+
+              <span class="toolbar-separator">
+                •
+              </span>
+
+              <span id="charCount">
+                0 characters
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="script-editor-wrap">
+
+            <textarea
+              id="lessonScript"
+              placeholder="Write your lesson here...
+
+Example:
+
+আসসালামু আলাইকুম।
+আজকের ক্লাসে আমরা শিখব কীভাবে একটি professional website তৈরি করা যায়।
+
+প্রথমে আমরা website structure বুঝব।
+তারপর HTML দিয়ে আমাদের page তৈরি করব..."
+              spellcheck="true"
+            ></textarea>
+
+            <div class="editor-bottom">
+
+              <span class="autosave-status" id="autosaveStatus">
+                ● Auto-save enabled
+              </span>
+
+              <span>
+                Your script stays in this browser until AI generation is connected.
+              </span>
+
+            </div>
+
+          </div>
+
+        </article>
+
+
+        <!-- ===============================================
+             VIDEO SETTINGS
+        ================================================ -->
+        <article class="studio-card settings-card">
+
+          <div class="card-header">
+
+            <div class="card-title-wrap">
+
+              <div class="card-icon settings-icon">
+                ⚙
+              </div>
+
+              <div>
+                <span class="card-kicker">04 · VIDEO</span>
+                <h2>Video Settings</h2>
+                <p>
+                  Choose the basic format for your teaching video.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="settings-grid">
+
+            <label class="setting-field">
+
+              <span>Video Format</span>
+
+              <select id="videoFormat">
+
+                <option value="16:9">
+                  16:9 · YouTube / Desktop
+                </option>
+
+                <option value="9:16">
+                  9:16 · Shorts / Reels
+                </option>
+
+                <option value="1:1">
+                  1:1 · Square
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="setting-field">
+
+              <span>Resolution</span>
+
+              <select id="videoResolution">
+
+                <option value="1080">
+                  Full HD · 1080p
+                </option>
+
+                <option value="720">
+                  HD · 720p
+                </option>
+
+                <option value="2160">
+                  4K · 2160p
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="setting-field">
+
+              <span>Mentor Position</span>
+
+              <select id="mentorPosition">
+
+                <option value="center">
+                  Center
+                </option>
+
+                <option value="left">
+                  Left
+                </option>
+
+                <option value="right">
+                  Right
+                </option>
+
+              </select>
+
+            </label>
+
+
+            <label class="setting-field">
+
+              <span>Background</span>
+
+              <select id="videoBackground">
+
+                <option value="original">
+                  Original
+                </option>
+
+                <option value="studio">
+                  AI Studio
+                </option>
+
+                <option value="classroom">
+                  Classroom
+                </option>
+
+                <option value="custom">
+                  Custom
+                </option>
+
+              </select>
+
+            </label>
+
+          </div>
+
+        </article>
+
+      </div>
+
+
+      <!-- =================================================
+           RIGHT SIDEBAR
+      ================================================== -->
+      <aside class="mentor-sidebar">
+
+
+        <!-- ===============================================
+             PROJECT CARD
+        ================================================ -->
+        <div class="sidebar-card project-card">
+
+          <div class="sidebar-card-header">
+
+            <div>
+              <span>PROJECT</span>
+              <h3>Mentor Project</h3>
+            </div>
+
+            <span class="project-live">
+              LIVE
+            </span>
+
+          </div>
+
+
+          <label class="project-input-label">
+            Project Name
+          </label>
+
+          <input
+            type="text"
+            id="projectName"
+            value="Untitled Mentor Project"
+            placeholder="Enter project name"
+          >
+
+
+          <button
+            type="button"
+            class="save-project-btn"
+            id="sidebarSaveBtn"
+          >
+            <span>💾</span>
+            Save Project
+          </button>
+
+
+          <div class="saved-time" id="savedTime">
+            Not saved yet
+          </div>
+
+        </div>
+
+
+        <!-- ===============================================
+             READINESS CARD
+        ================================================ -->
+        <div class="sidebar-card readiness-card">
+
+          <div class="readiness-header">
+
+            <div>
+              <span>AI READINESS</span>
+              <h3>Project Checklist</h3>
+            </div>
+
+            <div
+              class="readiness-percent"
+              id="readinessPercent"
+            >
+              0%
+            </div>
+
+          </div>
+
+
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              id="readinessProgress"
+              style="width:0%"
+            ></div>
+          </div>
+
+
+          <div class="checklist">
+
+            <div
+              class="check-item"
+              id="checkFace"
+            >
+              <span class="check-circle">✓</span>
+              <div>
+                <strong>Face Video</strong>
+                <small>Mentor identity</small>
+              </div>
+            </div>
+
+
+            <div
+              class="check-item"
+              id="checkVoice"
+            >
+              <span class="check-circle">✓</span>
+              <div>
+                <strong>Voice Sample</strong>
+                <small>Voice identity</small>
+              </div>
+            </div>
+
+
+            <div
+              class="check-item"
+              id="checkScript"
+            >
+              <span class="check-circle">✓</span>
+              <div>
+                <strong>Lesson Script</strong>
+                <small>Teaching content</small>
+              </div>
+            </div>
+
+
+            <div
+              class="check-item"
+              id="checkSettings"
+            >
+              <span class="check-circle">✓</span>
+              <div>
+                <strong>Video Settings</strong>
+                <small>Production format</small>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ===============================================
+             GENERATE CARD
+        ================================================ -->
+        <div class="sidebar-card generate-card">
+
+          <div class="generate-glow"></div>
+
+          <div class="generate-icon">
+            ✦
+          </div>
+
+          <span class="generate-kicker">
+            NEXT STEP
+          </span>
+
+          <h3>
+            Prepare AI Video
+          </h3>
+
+          <p>
+            Your face, voice and lesson will be prepared
+            for the AI generation workflow.
+          </p>
+
+
+          <button
+            type="button"
+            class="generate-btn"
+            id="prepareVideoBtn"
+          >
+            <span>✦</span>
+            Prepare AI Video
+            <span>→</span>
+          </button>
+
+
+          <small>
+            AI provider connection will be added later.
+          </small>
+
+        </div>
+
+
+        <!-- ===============================================
+             HELP CARD
+        ================================================ -->
+        <div class="sidebar-card help-card">
+
+          <div class="help-icon">
+            ?
+          </div>
+
+          <div>
+
+            <strong>Need help?</strong>
+
+            <p>
+              Keep your face video and voice sample
+              clean and consistent for better AI results.
+            </p>
+
+          </div>
+
+        </div>
+
+      </aside>
+
+    </section>
+
+
+    <!-- ===================================================
+         BOTTOM INFORMATION
+    ==================================================== -->
+    <section class="studio-info">
+
+      <div class="info-box">
+
+        <span class="info-box-icon">🔒</span>
+
+        <div>
+          <strong>Private Mentor Workspace</strong>
+
+          <p>
+            Your project information is stored locally in this
+            prototype. External AI generation will require a
+            secure provider connection.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="info-box">
+
+        <span class="info-box-icon">⚡</span>
+
+        <div>
+          <strong>Production Workflow</strong>
+
+          <p>
+            Identity → Voice → Script → Video Settings →
+            AI Generation → Final Export.
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- =====================================================
+       TOAST
+  ====================================================== -->
+  <div
+    class="mentor-toast"
+    id="mentorToast"
+    role="status"
+    aria-live="polite"
+  >
+    <span class="toast-icon">✓</span>
+    <span id="toastMessage">
+      Ready
+    </span>
   </div>
-</section>
 
-<div class="bottom-note">
-  <strong>Next integration:</strong>
-  Connect an authorized avatar-generation provider, voice-generation provider,
-  secure backend, and video rendering pipeline to turn this setup into
-  a real AI Mentor production system.
-</div>
 
-</div>
-</main>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-"use strict";
-
-/* ==========================================
-   SNK PERSONAL AI MENTOR
-   Step 1 — Frontend Setup Prototype
-   ========================================== */
-
-const $ = id => document.getElementById(id);
-
-let avatarURL = null;
-let voiceURL = null;
-
-const STORAGE_KEY = "snkPersonalAIMentorSetup_v1";
-
-/* TOAST */
-
-function toast(message){
-  const el = $("toast");
-  el.textContent = message;
-  el.classList.add("show");
-
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(()=>{
-    el.classList.remove("show");
-  },2800);
-}
-
-/* FILE SIZE */
-
-function formatSize(bytes){
-  if(bytes < 1024*1024){
-    return (bytes/1024).toFixed(1)+" KB";
-  }
-  return (bytes/(1024*1024)).toFixed(1)+" MB";
-}
-
-/* AVATAR VIDEO */
-
-$("avatarInput").addEventListener("change",event=>{
-  const file = event.target.files[0];
-  if(!file) return;
-
-  if(!file.type.startsWith("video/")){
-    toast("Please select a valid video file.");
-    event.target.value="";
-    return;
-  }
-
-  if(avatarURL) URL.revokeObjectURL(avatarURL);
-
-  avatarURL = URL.createObjectURL(file);
-
-  const video = $("avatarVideo");
-  video.src = avatarURL;
-  video.hidden = false;
-
-  $("avatarPlaceholder").hidden = true;
-  $("avatarFileName").textContent =
-    file.name+" · "+formatSize(file.size);
-
-  toast("Avatar video loaded for local preview.");
-});
-
-$("removeAvatarBtn").addEventListener("click",()=>{
-  if(avatarURL) URL.revokeObjectURL(avatarURL);
-
-  avatarURL=null;
-  $("avatarVideo").pause();
-  $("avatarVideo").removeAttribute("src");
-  $("avatarVideo").load();
-  $("avatarVideo").hidden=true;
-
-  $("avatarPlaceholder").hidden=false;
-  $("avatarInput").value="";
-  $("avatarFileName").textContent="No video selected";
-
-  toast("Avatar preview removed.");
-});
-
-/* VOICE AUDIO */
-
-$("voiceInput").addEventListener("change",event=>{
-  const file = event.target.files[0];
-  if(!file) return;
-
-  if(!file.type.startsWith("audio/")){
-    toast("Please select a valid audio file.");
-    event.target.value="";
-    return;
-  }
-
-  if(voiceURL) URL.revokeObjectURL(voiceURL);
-
-  voiceURL=URL.createObjectURL(file);
-
-  const audio=$("voiceAudio");
-  audio.src=voiceURL;
-  audio.hidden=false;
-
-  $("voiceFileName").textContent =
-    file.name+" · "+formatSize(file.size);
-
-  $("voiceStatus").textContent =
-    "Voice sample ready for local playback.";
-
-  toast("Voice sample loaded.");
-});
-
-/* SCRIPT COUNTER */
-
-function updateWordCount(){
-  const text=$("scriptEditor").value.trim();
-  const words=text ? text.split(/\s+/).length : 0;
-
-  $("wordCount").textContent =
-    words+" words · "+$("scriptEditor").value.length+" characters";
-
-  $("scriptStatus").textContent =
-    text ? "Editing" : "Draft";
-}
-
-$("scriptEditor").addEventListener("input",()=>{
-  updateWordCount();
-  saveDraftQuietly();
-});
-
-/* SCRIPT ACTIONS */
-
-$("clearScriptBtn").addEventListener("click",()=>{
-  if(!$("scriptEditor").value) return;
-
-  if(confirm("Clear the current lesson script?")){
-    $("scriptEditor").value="";
-    updateWordCount();
-    saveDraftQuietly();
-    toast("Script cleared.");
-  }
-});
-
-$("copyScriptBtn").addEventListener("click",async()=>{
-  const text=$("scriptEditor").value;
-
-  if(!text.trim()){
-    toast("Write a script first.");
-    return;
-  }
-
-  try{
-    await navigator.clipboard.writeText(text);
-    toast("Script copied.");
-  }catch(error){
-    $("scriptEditor").select();
-    document.execCommand("copy");
-    toast("Script copied.");
-  }
-});
-
-$("downloadScriptBtn").addEventListener("click",()=>{
-  const text=$("scriptEditor").value.trim();
-
-  if(!text){
-    toast("Write a script first.");
-    return;
-  }
-
-  const title=$("lessonTitle").value.trim() || "AI-Mentor-Lesson";
-
-  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=title.replace(/[^a-z0-9-_]/gi,"-")+".txt";
-  a.click();
-
-  URL.revokeObjectURL(url);
-  toast("Script exported.");
-});
-
-/* LOCAL PROJECT SAVE
-   Text/settings only. Media files are not persisted.
-*/
-
-function getProjectData(){
-  return {
-    mentorName:$("mentorName").value,
-    mentorStyle:$("mentorStyle").value,
-    voiceLanguage:$("voiceLanguage").value,
-    voiceTone:$("voiceTone").value,
-    voiceNotes:$("voiceNotes").value,
-    lessonTitle:$("lessonTitle").value,
-    script:$("scriptEditor").value,
-    savedAt:new Date().toISOString()
-  };
-}
-
-function saveDraftQuietly(){
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(getProjectData()));
-  }catch(error){
-    console.warn("Draft could not be saved.",error);
-  }
-}
-
-$("saveProjectBtn").addEventListener("click",()=>{
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(getProjectData()));
-    toast("Setup and script saved in this browser.");
-  }catch(error){
-    toast("Unable to save. Browser storage may be full.");
-  }
-});
-
-/* RESTORE */
-
-function restoreProject(){
-  try{
-    const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");
-    if(!saved) return;
-
-    $("mentorName").value=saved.mentorName||"";
-    $("mentorStyle").value=saved.mentorStyle||"professional";
-    $("voiceLanguage").value=saved.voiceLanguage||"bn";
-    $("voiceTone").value=saved.voiceTone||"Natural & Clear";
-    $("voiceNotes").value=saved.voiceNotes||"";
-    $("lessonTitle").value=saved.lessonTitle||"";
-    $("scriptEditor").value=saved.script||"";
-
-    updateWordCount();
-  }catch(error){
-    console.warn("Saved project could not be restored.",error);
-  }
-}
-
-[
-  "mentorName",
-  "mentorStyle",
-  "voiceLanguage",
-  "voiceTone",
-  "voiceNotes",
-  "lessonTitle"
-].forEach(id=>{
-  $(id).addEventListener("change",saveDraftQuietly);
-});
-
-/* SCRIPT PREVIEW */
-
-$("previewScriptBtn").addEventListener("click",()=>{
-  const script=$("scriptEditor").value.trim();
-
-  if(!script){
-    toast("Write a lesson script first.");
-    return;
-  }
-
-  const preview=window.open("","_blank");
-
-  if(!preview){
-    toast("Allow popups to preview the script.");
-    return;
-  }
-
-  const safeText=script.replace(/[&<>"']/g,char=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;"
-  })[char]);
-
-  preview.document.write(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Lesson Script Preview</title>
-    <style>
-      body{
-        max-width:850px;
-        margin:50px auto;
-        padding:25px;
-        font-family:Arial,sans-serif;
-        background:#f4f7fb;
-        color:#172033;
-        line-height:1.9;
-      }
-      article{
-        background:white;
-        padding:35px;
-        border-radius:15px;
-        box-shadow:0 10px 35px #0001;
-        white-space:pre-wrap;
-      }
-      h1{font-size:28px}
-      .meta{color:#64748b;font-size:13px;margin-bottom:25px}
-      @media(max-width:600px){body{margin:10px;padding:10px}article{padding:20px}}
-    </style>
-    </head>
-    <body>
-      <article>
-        <h1>${($("lessonTitle").value||"Lesson Preview").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}</h1>
-        <div class="meta">Personal Course Studio · Script Preview</div>
-        ${safeText}
-      </article>
-    </body>
-    </html>
-  `);
-
-  preview.document.close();
-});
-
-/* GENERATION PLACEHOLDER */
-
-$("generateBtn").addEventListener("click",()=>{
-  const script=$("scriptEditor").value.trim();
-
-  if(!script){
-    toast("Add your lesson script first.");
-    return;
-  }
-
-  if(!avatarURL){
-    toast("Upload your avatar video first.");
-    return;
-  }
-
-  if(!voiceURL){
-    toast("Upload your voice sample first.");
-    return;
-  }
-
-  $("progressWrap").style.display="block";
-  $("progressFill").style.width="100%";
-  $("progressLabel").textContent=
-    "Setup validated. AI generation service is not connected.";
-
-  toast("Your project is ready for AI service integration.");
-});
-
-/* INIT */
-
-restoreProject();
-updateWordCount();
-
-window.addEventListener("beforeunload",()=>{
-  if(avatarURL) URL.revokeObjectURL(avatarURL);
-  if(voiceURL) URL.revokeObjectURL(voiceURL);
-});
-</script>
+  <!-- =====================================================
+       SCRIPT
+  ====================================================== -->
+  <script src="ai-mentor.js"></script>
 
 </body>
 </html>
